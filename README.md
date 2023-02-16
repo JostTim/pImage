@@ -1,4 +1,13 @@
 # pImage
+
+The goal of this package is to provide a common and unified API for reading and writing sequences of 2D arrays from farious formats to python numpy arrays, and the other way around. It uses openCV lib for most of the job, and Pillow for some cases (as gif for example)
+As a supplementary feature, this package also allows for manipulating numpy arrays for esthetic purposes :
+- providing classes to snap together multiple arrays synchronized in a single output (mutiple videos layed out next to each other in a singe avi or gif for example), 
+- helper functions for making colored arrays (3D RGB arrays) from arrays of 1D values, using colormaps
+- save matplotlib plots outputs to rasterized RGB arrays, in order to be used in the API like any other array and be saveable in videos.
+- provide image transformations functions (contrast, brightness, clahe, padding, cropping, gaussian filtering, sharp filters, text annotation) to 2D or 3D arrays, and be able to perform these at read time from a single frame of a reader function (in order to minimize RAM load when working with very large videos).
+- For the same purpose of minimizing RAM load, a reader and writer can be piped together so that the later writes frames to disk as soon as the reader provides a frame, keeping RAM usage low during vide conversion (as well as video tratment, as a reader can be transformed into a "transforming_reader" using any transformation function cited above.)
+
  
 Usage : 
 
