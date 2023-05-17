@@ -689,8 +689,29 @@ class VignetteBuilder():
             frame[x:ex,y:ey,:] = patch 
         return frame
         
-    
 def get_title_band(array,title, height = 50, bg_color = 0, **kwargs):
+    """
+    Create a band with the provided `title` and `bg_color` to be used as a title for an `array`. 
+
+    Parameters:
+    -----------
+    array : numpy array
+        The array to which the title band will be added as a title.
+    title : str
+        The title to be displayed in the title band.
+    height : int, optional
+        The height of the title band, by default 50.
+    bg_color : int or tuple of ints, optional
+        The background color of the title band, by default 0. 
+    **kwargs : dict
+        Additional keyword arguments to be passed to the `annotate_image` function.
+
+    Returns:
+    --------
+    numpy array
+        A title band with the provided `title`, `height` and `bg_color`.
+
+    """
     from transformations import annotate_image
     title_band = np.ones(shape = (height,array.shape[1],3),dtype = array.dtype)# a band of width 50 of the same width as the Y axis of the array
     title_band = annotate_image(title_band * bg_color, title , **kwargs)#fontsize=55, font = "DejaVuSans-Bold.ttf",shadow_size = 1)
