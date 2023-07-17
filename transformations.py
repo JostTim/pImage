@@ -326,11 +326,15 @@ def apply_lut(array, lut):
 def make_lut_gamma(gamma,inv_gamma = True):
     if inv_gamma : 
         gamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 255)]).astype("uint8")
     return table
 
-def make_lut_curve(slope=1,shift=0):
-    return [constrain(to_uint(math.erf(i*slope))+shift) for i in np.linspace(-1,1,256)]
+def make_lut_curve(slope=4,inflexion_point=0.5):
+    slope = constrain(slope,1,None)
+    inflexion_point = constrain(inflexion_point,0,1)
+    cut = slope*inflexion_point
+    l_cut, r_cut = cut,  slope - cut
+    return [constrain(to_uint(math.erf(i))) for i in np.linspace(-l_cut,r_cut,256)]
 
 def sharpen_img(img,amount = 0.7):
     from scipy.ndimage.filters import median_filter
@@ -344,12 +348,11 @@ def to_norm(value):#0-255 to -1 - 1
     return int((value - (255/2))/ (255/2))
 
 def constrain(value, mini = 0 , maxi = 255):
-    if mini < value < maxi :
-        return value
-    if value < mini :
+    if mini is not None and value < mini :
         return mini
-    else :
+    if maxi is not None and value > maxi :
         return maxi
+    return value
     
 def grayscale(image,biases = [1/3,1/3,1/3]):
     """
@@ -446,6 +449,129 @@ def gaussian(frame,value):
     from skimage import filters
     frame = filters.gaussian(frame, sigma=(value, value), truncate = 6, preserve_range = True).astype('uint8')
     return frame
+
+def convert_scale(img, alpha, beta):
+    """Add bias and gain to an image with saturation arithmetics. Unlike
+    cv2.convertScaleAbs, it does not take an absolute value, which would lead to
+    nonsensical results (e.g., a pixel at 44 with alpha = 3 and beta = -210
+    becomes 78 with OpenCV, when in fact it should become 0).
+    """
+
+    new_img = img * alpha + beta
+    new_img[new_img < 0] = 0
+    new_img[new_img > 255] = 255
+    return new_img.astype(np.uint8)
+
+# Automatic brightness and contrast optimization with optional histogram clipping
+def automatic_brightness_and_contrast(image, clip_hist_percent=25, return_metrics = False):
+    try :
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    except :
+        gray = image
+
+    # Calculate grayscale histogram
+    hist = cv2.calcHist([gray],[0],None,[256],[0,256])
+    hist_size = len(hist)
+
+    # Calculate cumulative distribution from the histogram
+    accumulator = []
+    accumulator.append(float(hist[0]))
+    for index in range(1, hist_size):
+        accumulator.append(accumulator[index -1] + float(hist[index]))
+
+    # Locate points to clip
+    maximum = accumulator[-1]
+    clip_hist_percent *= (maximum/100.0)
+    clip_hist_percent /= 2.0
+
+    # Locate left cut
+    minimum_gray = 0
+    while accumulator[minimum_gray] < clip_hist_percent:
+        minimum_gray += 1
+
+    # Locate right cut
+    maximum_gray = hist_size -1
+    while accumulator[maximum_gray] >= (maximum - clip_hist_percent):
+        maximum_gray -= 1
+
+    # Calculate alpha and beta values
+    alpha = 255 / (maximum_gray - minimum_gray)
+    beta = -minimum_gray * alpha
+
+    '''
+    # Calculate new histogram with desired range and show histogram 
+    new_hist = cv2.calcHist([gray],[0],None,[256],[minimum_gray,maximum_gray])
+    plt.plot(hist)
+    plt.plot(new_hist)
+    plt.xlim([0,256])
+    plt.show()
+    '''
+
+    auto_result = convert_scale(image, alpha=alpha, beta=beta)
+    return (auto_result, alpha, beta) if return_metrics else auto_result
+
+def mpl_colorify_array(array, cmap):
+    """Converts an image as numpy array from 2D (grayscale) to 3D with 3rd dimension having 4 values, RGB and A. 
+    (red green blue and alpha respectively)
+    
+    Args:
+        array (_type_): _description_
+        cmap (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    if isinstance(cmap,list):
+        import matplotlib.colors as mcolors
+        cmap = mcolors.LinearSegmentedColormap.from_list("blackgreen", cmap)
+    import matplotlib.pyplot as plt
+    norm = plt.Normalize(0,255)
+    def get_value(value):
+        nonlocal norm
+        return cmap(norm(value))
+    new_array = np.apply_along_axis(get_value, arr = array.ravel(), axis = 0) *255
+    return new_array.reshape(array.shape+(4,)).astype(np.uint8)
+
+def compute_transform_matrix(image,dx,dy,angle,tfirst = False):
+    """
+    This function calculates the transformation matrix for a given image.
+    
+    Parameters:
+        image (numpy.ndarray): 2d array representing image. 
+        dx (int): Horizontal translation in pixels.
+        dy (int): Vertical translation in pixels.
+        angle (float): Rotation angle in degrees.
+        tfirst (bool, optional): If True, the translation is applied before the rotation. Default is False.
+
+    Returns:
+        numpy.ndarray: The resulting transformation matrix.
+    """
+    Matrix_r = np.vstack((cv2.getRotationMatrix2D((image.shape[0]/2,image.shape[1]/2), angle, 1.0),np.array([0,0,1]))) 
+    Matrix_t = np.vstack((np.array([[1,0,dx],[0,1,dy]]),np.array([0,0,1]))) 
+    if tfirst :
+        return np.matmul(Matrix_r,Matrix_t)[:2,:] #translation then rotation, change order to do otherwise
+    return np.matmul(Matrix_t,Matrix_r)[:2,:] #rotation then translation, change order to do otherwise
+
+def affine_transform(array,dx,dy,angle,tfirst = False,bordervalue = 0):
+    """
+    This function performs an affine transform on a given image.
+    
+    Parameters:
+        array (numpy.ndarray): 2d array representing image. 
+        dx (int): Horizontal translation in pixels.
+        dy (int): Vertical translation in pixels.
+        angle (float): Rotation angle in degrees.
+        tfirst (bool, optional): If True, the translation is applied before the rotation. Default is False.
+        bordervalue (int, optional): Pixel value for the borders after the affine transformation. Default is 0.
+
+    Returns:
+        numpy.ndarray: Transformed image.
+    """
+    id_matrix = compute_transform_matrix(array,dx,dy,angle,tfirst) #these have been tested and are the good direction 
+    #(+x is pushing data toward right, +y toward bottom on a default matplotlib imshow)
+    if np.isnan(bordervalue):
+        array = array.astype(np.float32)
+    return cv2.warpAffine(array,id_matrix,tuple(reversed(array.shape[0:2])),flags=cv2.INTER_LANCZOS4, borderMode  = cv2.BORDER_CONSTANT, borderValue = bordervalue)
 
 if __name__ == "__main__" :
     
