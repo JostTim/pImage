@@ -26,7 +26,8 @@ import cv2
 import numpy as np
 import math
 
-from readers import _readers_factory
+from .readers import _readers_factory
+from .blend_modes import *
 
 available_transforms = {"rotate","crop","annotate","resize","brightness","contrast","gamma","clahe","clipLimit","tileGridSize","sharpen"}
 
@@ -572,6 +573,19 @@ def affine_transform(array,dx,dy,angle,tfirst = False,bordervalue = 0):
     if np.isnan(bordervalue):
         array = array.astype(np.float32)
     return cv2.warpAffine(array,id_matrix,tuple(reversed(array.shape[0:2])),flags=cv2.INTER_LANCZOS4, borderMode  = cv2.BORDER_CONSTANT, borderValue = bordervalue)
+
+def find_best_exposure(image):
+    import cv2
+    hist = cv2.calcHist([image], [0], None, [256], [0,256])  
+    pixels = np.cumsum(hist)  
+    total_pixels = image.shape[0] * image.shape[1]
+    vmin = 0
+    while pixels[vmin] < total_pixels / 100:
+        vmin += 1
+    vmax = 255
+    while pixels[vmax] > total_pixels - total_pixels / 100:
+        vmax -= 1
+    return (vmin, vmax)
 
 if __name__ == "__main__" :
     

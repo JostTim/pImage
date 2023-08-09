@@ -1,14 +1,12 @@
 # -*- coding: utf-8 -*-
 
-import sys, os
-sys.path.append(os.path.dirname(__file__))
-
-from image import *
-from video import *
-from converters import *
-from transformations import *
-import interact
-import mosaics
+from . image import *
+from . video import *
+from . converters import *
+from . transformations import *
+from . blend_modes import *
+from . import interact
+from . import mosaics
 
 try :
     from PIL import Image as pillow

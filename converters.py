@@ -19,8 +19,8 @@ Created on Tue Oct 12 17:34:44 2021
 
 from multiprocessing import Pool, Manager, TimeoutError
 import sys, time
-from readers import AutoVideoReader
-from writers import AutoVideoWriter
+from .readers import AutoVideoReader
+from .writers import AutoVideoWriter
 
 class StandardConverter:
 

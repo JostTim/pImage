@@ -5,10 +5,7 @@ import cv2
 
 import warnings
 
-
-
-
-import readers
+from . import readers
 
 g_hjob = None
 

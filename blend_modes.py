@@ -101,6 +101,46 @@ def _compose_alpha(img_in, img_layer, opacity):
     ratio[ratio == np.NAN] = 0.0
     return ratio
 
+def gray_to_4_layer(image, apply_to = "red,green,blue", *, vmin = None, vmax = None, dtype = np.uint8):
+    """
+    Converts the given grayscale image to a 4-layered RGB image (addition of alpha channel to represent transparency).
+    The luminance (min and max) of the resulting image can be controlled by the parameters 'vmin' and 'vmax'. 
+    The 'apply_to' parameter is used for specifying the desired color channels. 
+
+    Args:
+        image (ndarray): A Grayscale image whose max value needs to find.
+        apply_to (str, optional): A string containing color channel names 'red', 'green', 'blue', 'alpha', or 'colors' for all three. Defaults to 'colors'.
+        vmin (int, optional): The desired minimum value of brightness/luminance. If None, automatically calculated from the histogram. Defaults to None.
+        vmax (int, optional): The desired maximum value of brightness/luminance. If None, automatically calculated from the histogram. Defaults to None.
+
+    Returns:
+        (ndarray): A 4-layered RGB image with dimensions matching the input image.
+    """
+    from .transformations import rescale_to_8bit, find_best_exposure
+    try :
+        expvmin, expvmax = find_best_exposure(image)
+        if vmin is None :
+            vmin = expvmin
+        if vmax is None :
+            vmax = expvmax
+    except :
+        pass
+    image = rescale_to_8bit(image, vmin = vmin, vmax = vmax)
+    black = np.zeros_like(image, dtype = np.uint8)
+    white = np.ones_like(image, dtype = np.uint8)*255
+    apply_to = apply_to.replace("colors","red,green,blue")
+    apply_to = apply_to.split(",")
+    rgba = []
+    for color in ["red","green","blue","alpha"] :
+        if color in apply_to :
+            col_array = image
+        else :
+            if color == "alpha":
+                col_array = white
+            else :
+                col_array = black
+        rgba.append(col_array)
+    return np.dstack(rgba).astype(dtype)
 
 def normal(img_in, img_layer, opacity, disable_type_checks: bool = False):
     """Apply "normal" blending mode of a layer on an image.
