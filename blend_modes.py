@@ -101,7 +101,7 @@ def _compose_alpha(img_in, img_layer, opacity):
     ratio[ratio == np.NAN] = 0.0
     return ratio
 
-def gray_to_4_layer(image, apply_to = "red,green,blue", *, vmin = None, vmax = None, dtype = np.uint8):
+def gray_to_4_layer(image, apply_to = "red,green,blue", *, vmin = None, vmax = None, dtype = np.uint8, pmin = 2, pmax = 98):
     """
     Converts the given grayscale image to a 4-layered RGB image (addition of alpha channel to represent transparency).
     The luminance (min and max) of the resulting image can be controlled by the parameters 'vmin' and 'vmax'. 
@@ -118,7 +118,7 @@ def gray_to_4_layer(image, apply_to = "red,green,blue", *, vmin = None, vmax = N
     """
     from .transformations import rescale_to_8bit, find_best_exposure
     try :
-        expvmin, expvmax = find_best_exposure(image)
+        expvmin, expvmax = find_best_exposure(image, pmin = pmin, pmax = pmax)
         if vmin is None :
             vmin = expvmin
         if vmax is None :

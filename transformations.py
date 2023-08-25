@@ -574,17 +574,35 @@ def affine_transform(array,dx,dy,angle,tfirst = False,bordervalue = 0):
         array = array.astype(np.float32)
     return cv2.warpAffine(array,id_matrix,tuple(reversed(array.shape[0:2])),flags=cv2.INTER_LANCZOS4, borderMode  = cv2.BORDER_CONSTANT, borderValue = bordervalue)
 
-def find_best_exposure(image):
-    import cv2
-    hist = cv2.calcHist([image], [0], None, [256], [0,256])  
-    pixels = np.cumsum(hist)  
-    total_pixels = image.shape[0] * image.shape[1]
-    vmin = 0
-    while pixels[vmin] < total_pixels / 100:
-        vmin += 1
-    vmax = 255
-    while pixels[vmax] > total_pixels - total_pixels / 100:
-        vmax -= 1
+def find_best_exposure(image, method = "percentile", pmin = 2, pmax = 98):
+    """This function calculates the best exposure values for a given image. 
+
+    The function utilizes OpenCV-python library to calculate the histogram of the image.
+    The cumulative sum of histogram bins is calculated using numpy, and is used to identify 
+    the values below and above which 1% of the pixel intensities lie. This range of intensity (vmin, vmax)
+
+    Args:
+        image (np.ndarray): An image in numpy array format for which best exposure needs to be calculated.
+
+    Returns:
+        tuple: A tuple containing two elements, vmin and vmax representing the range of best exposure values.
+    """
+    # Calculate the histogram of the image
+    if method == "iqr" :
+        #TODO : #this method doesn't work, need to fix it
+        hist = cv2.calcHist([image], [0], None, [256], [0,256])
+        hist = hist.ravel()/hist.sum()
+        Q1, Q3 = np.percentile(hist, [25 ,75])
+        iqr = Q3 - Q1
+
+        vmin = max(0, Q1 - 1.5*iqr)
+        vmax = min(255, Q3 + 1.5*iqr)
+
+    if method == "percentile" :
+
+        vmin = np.percentile(image, pmin)
+        vmax = np.percentile(image, pmax)
+
     return (vmin, vmax)
 
 if __name__ == "__main__" :
