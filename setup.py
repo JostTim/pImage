@@ -41,6 +41,8 @@ setup(
     install_requires=[
         "numpy>=1.23",
         "opencv-python>=4.6",
+        "ffmpeg>=1.4",
+        "tifffile>=2022.10"
     ],
     entry_points={},
     scripts={},

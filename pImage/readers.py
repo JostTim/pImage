@@ -238,10 +238,10 @@ class FFmpegReader(DefaultReader):
     except : 
         warnings.warn("Cannot import ffmpeg. Will not use it for Readers and will fall back to OpenCVReader. This may have drawback effects on corrupted metadata avi files reading. (FFMPEG is better at this tahn openCV)")
         ffmpeg = None
-    #THis reader is based on video time  (based on framerate and ffmped seek)
-    #It is usefull for long videos that are somewhat currupted in the sense that opencv reader
+    #This reader is based on video time (e.g. based on framerate metadata and ffmped seek)
+    #It is usefull for long videos that are somewhat corrupted in the sense that opencv reader
     #dont' get all  the frames with cv2.CAP_PROP_FRAME_COUNT and you wish to access a part of 
-    #the video that lie beyond this point in the video.
+    #the video that lie beyond this point in the video. (this corruption often occurw when saving an avi file and writer is not properly closed.)
     
     def __init__(self,path,**kwargs):
         

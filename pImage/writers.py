@@ -20,6 +20,7 @@ Created on Tue Oct 12 18:54:37 2021
 import os, warnings
 import numpy as np
 from cv2 import VideoWriter, VideoWriter_fourcc
+from cv2 import cvtColor, COLOR_RGB2BGR, COLOR_HSV2BGR, COLOR_BGRA2BGR, COLOR_RGBA2BGR
 
 def select_extension_writer(file_path):
     if os.path.splitext(file_path)[1] == ".avi" :
@@ -164,7 +165,7 @@ class OpenCVWriter(DefaultWriter):
         self.file_handle = None
         
     def _write_frame(self,array):
-        from cv2 import cvtColor, COLOR_RGB2BGR, COLOR_HSV2BGR, COLOR_BGRA2BGR, COLOR_RGBA2BGR
+        
         if self.file_handle is None :
             
             self.size = np.shape(array)[1], np.shape(array)[0]
@@ -216,10 +217,12 @@ class TiffWriter(DefaultWriter):
     """
     TiffWriter inherits from DefaultWriter, and is specifically for writing .tiff image files. Notably, it uses libtiff to create single frame TIFF images.
     """
+    
+    #libtiff is broken. Do not use for now, need to find a replacement at some point. 
     try :
-        from libtiff import TIFF as tiff_writer
+        from tifffile import TiffWriter
     except ImportError as e:
-        warnings.warn("Could not import libtiff. You will not be able to use TiffWriter")
+        warnings.warn("Could not import tifffile. You will not be able to use TiffWriter")
 
     def __init__(self,path,**kwargs):
         self.path =  os.path.dirname(path)
@@ -234,15 +237,19 @@ class TiffWriter(DefaultWriter):
     def _write_frame(self,array):
         _fullpath = self._make_full_fullpath(self.index)
             
-        tiff_writer = self.tiff_writer.open(_fullpath, mode = "w")
-        tiff_writer.write_image(array)
-        tiff_writer.close()
-        self.index += 1
+        with self.TiffWriter(_fullpath) as tiff_writer: 
+            tiff_writer.write(array)
+            self.index += 1
 
 class GifWriter(DefaultWriter):
     """
     GifWriter inherits from DefaultWriter, and is specifically for creating GIFs. This writer accumulates frames and stores them in a GIF format. It allows customization such as framerate, seamless looping, optimization, etc.
     """  
+    try :
+        from PIL import Image as pillow_image
+    except ImportError as e:
+        warnings.warn("Could not import pillow. You will not be able to use GifWriter")
+
     def __init__(self,path,**kwargs):
         self.path = path
         self.frame_bank = []
@@ -252,8 +259,8 @@ class GifWriter(DefaultWriter):
         self.infinite = kwargs.get("infinite",True)
         
     def _write_frame(self,array):
-        from PIL import Image as pillow_image
-        self.frame_bank.append(pillow_image.fromarray(array))
+        
+        self.frame_bank.append(self.pillow_image.fromarray(array))
 
     def flush(self):
         start = 0
