@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 
-import os
+import os, warnings
 
 
 try :
@@ -36,7 +36,7 @@ def _readers_factory(file_path,**kwargs):
         return UnknownReader
         #raise NotImplementedError("File extension/CODEC not supported yet")
 
-class AutoVideoReader:
+class VideoReader:
   #do not inherit from this class. It only returns other classes factories. 
   def __new__(cls,path,**kwargs):
       from transformations import TransformingReader, available_transforms
@@ -236,6 +236,7 @@ class FFmpegReader(DefaultReader):
     try : 
         import ffmpeg
     except : 
+        warnings.warn("Cannot import ffmpeg. Will not use it for Readers and will fall back to OpenCVReader. This may have drawback effects on corrupted metadata avi files reading. (FFMPEG is better at this tahn openCV)")
         ffmpeg = None
     #THis reader is based on video time  (based on framerate and ffmped seek)
     #It is usefull for long videos that are somewhat currupted in the sense that opencv reader
@@ -292,8 +293,3 @@ class FFmpegReader(DefaultReader):
     
     def _get_all(self):
         raise NotImplementedError("Cannot know total duration from ffmpeg reader. Use sequence to get sequence betwen start and stop duration.")
-            
-if __name__ == "__main__" :
-    import matplotlib.pyplot as plt
-
-    test  = AutoVideoReader("tes.avi",rotate = 1)

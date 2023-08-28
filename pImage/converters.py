@@ -19,8 +19,8 @@ Created on Tue Oct 12 17:34:44 2021
 
 from multiprocessing import Pool, Manager, TimeoutError
 import sys, time
-from .readers import AutoVideoReader
-from .writers import AutoVideoWriter
+from .readers import VideoReader
+from .writers import VideoWriter
 
 class StandardConverter:
 
@@ -44,9 +44,9 @@ class StandardConverter:
         
         with Pool(processes=2) as pool:
 
-            read_process = pool.apply_async(self.read, (AutoVideoReader,self.read_queue,self.message_queue,self.start_frame,self.stop_frame))
+            read_process = pool.apply_async(self.read, (VideoReader,self.read_queue,self.message_queue,self.start_frame,self.stop_frame))
             #transform_process = pool.apply_async(self.transform, (self.kwargs.pop("transform_function",_lambda_transform),self.read_queue,self.transformed_queue,self.message_queue))
-            write_process = pool.apply_async(self.write, (AutoVideoWriter,self.read_queue,self.message_queue))
+            write_process = pool.apply_async(self.write, (VideoWriter,self.read_queue,self.message_queue))
 
             self.last_update = time.time()
             self.r = self.w = 0

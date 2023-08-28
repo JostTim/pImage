@@ -6,149 +6,6 @@ import cv2
 import warnings
 
 from . import readers
-
-g_hjob = None
-
-def create_job(job_name='', breakaway='silent'):
-    import win32job
-    hjob = win32job.CreateJobObject(None, job_name)
-    if breakaway:
-        info = win32job.QueryInformationJobObject(hjob,
-                    win32job.JobObjectExtendedLimitInformation)
-        if breakaway == 'silent':
-            info['BasicLimitInformation']['LimitFlags'] |= (
-                win32job.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK)
-        else:
-            info['BasicLimitInformation']['LimitFlags'] |= (
-                win32job.JOB_OBJECT_LIMIT_BREAKAWAY_OK)
-        win32job.SetInformationJobObject(hjob,
-            win32job.JobObjectExtendedLimitInformation, info)
-    return hjob
-
-def assign_job(hjob):
-    import win32api, win32job, winerror
-    global g_hjob
-    hprocess = win32api.GetCurrentProcess()
-    try:
-        win32job.AssignProcessToJobObject(hjob, hprocess)
-        g_hjob = hjob
-    except win32job.error as e:
-        if (e.winerror != winerror.ERROR_ACCESS_DENIED or
-            sys.getwindowsversion() >= (6, 2) or
-            not win32job.IsProcessInJob(hprocess, None)):
-            raise
-        warnings.warn('The process is already in a job. Nested jobs are not '
-            'supported prior to Windows 8.')
-
-def limit_memory(memory_limit):
-    import win32job
-    if g_hjob is None:
-        return
-    info = win32job.QueryInformationJobObject(g_hjob, win32job.JobObjectExtendedLimitInformation)
-    info['ProcessMemoryLimit'] = memory_limit
-    info['BasicLimitInformation']['LimitFlags'] |= (win32job.JOB_OBJECT_LIMIT_PROCESS_MEMORY)
-    win32job.SetInformationJobObject(g_hjob, win32job.JobObjectExtendedLimitInformation, info)
-
-class memarray(np.memmap):
-    def __new__(cls, input_array,**kwargs):
-        import random
-        rdir = kwargs.pop("root",os.path.abspath("memaps")) 
-        if not os.path.isdir(rdir):
-            os.makedirs(rdir)
-        while True :   
-            filename = os.path.join(rdir,"".join([ chr(65+int(random.random()*26)+int(random.random()+0.5)*32) for _ in range(10)]) + ".mmp")
-            if not os.path.isfile(filename):
-                break       
-                
-        memobj = super().__new__(cls, filename, shape = input_array.shape , mode = kwargs.pop("mode","w+"), **kwargs )
-        whole_slices = tuple([slice(None)]*len(input_array.shape))
-        memobj[whole_slices] = input_array[whole_slices]
-        
-        return memobj
-    
-    def close(self):
-        try :
-            self.flush()
-            if self._mmap is not None:
-                self._mmap.close()
-            os.remove(self.filename)
-        except ValueError :
-            return
-
-class array_video_color(memarray):
-    """
-    - 2D_color (treat input array as 3D colored single frame, so convert from shape (X,X,3) to (X,X,3,T))
-    - 2D_bw (treat input aray as 2D BW : so convert from shape (X,X) to (X,X,3,T))
-    - None (if 3D array : convert as 4D from (X,X,T) to (X,X,3,T) 
-           (if 4D array, return out silently the input np.ndarray)
-           
-    And todo, actually make this take care of the memmaping instead of wraping it inside the VignetteMaker class
-    Because this class knows the time, color, and repetition feature of the data inside it's instances.
-    Vignete doesn't have to.
-    
-    Last todo : To account for vignettes where the video data time are shifted, 
-    if index outside bounds, return a flat black image 
-    (actually, should this be inside Vignette rather ? If we still want some labels on top of empty data....)
-        
-    Purpose is to mimic the use of a 3D array seamlessly inside some functions 
-    that use them for builind vignettes, for flat data that don't change along time, 
-    without having to uselessly multiply data usulessly before it needs to be acessed.
-    This, in the end, saves some headaches, because it takes as input a 2D or 3D array, and return
-    either an instance of this class or a standard np.ndarray, that can be indexed along 
-    3 dimensions in the exat same way.
-    """
-    
-    
-    
-    def __new__(cls, input_array, max_time = 1, array_type = None, **kwargs):
-        """If max_time not specified, this class is only usefull to allow a get of one "time frame" 
-        at a time and still be compatible with real 3D arrays iterated the same way, without the need for external compatibility checks.
-        """
-        
-        if array_type is None :
-            if len(input_array.shape) == 3:
-                obj = np.repeat( input_array[:,:,:,np.newaxis].astype(np.uint8), 3 ,axis = 3)
-            elif len(input_array.shape) == 4 and input_array.shape[2] ==  3 :
-                obj = input_array.astype(np.uint8)
-            else :
-                raise ValueError("Array shape not understood. Make sure it matches requirements stated in documentation")
-        
-        elif array_type == "2D_bw" :
-            if len(input_array.shape) == 2 :
-                if max_time is None :
-                    raise ValueError("max_time cannot be None if self is not a 3D array")
-                obj = np.repeat(np.repeat( input_array[:,:,np.newaxis].astype(np.uint8), 3 ,axis = 2)[np.newaxis,:,:,:],max_time,axis = 0)
-            elif len(input_array.shape) == 3 :
-                obj = np.repeat( input_array[:,:,:,np.newaxis], 3 ,axis = 3, dtype = np.uint8)
-            else :
-                raise ValueError("Array shape not understood. Make sure it matches requirements stated in documentation")
-        
-        elif array_type == "2D_color" :
-            if len(input_array.shape) == 3 :
-                if max_time is None :
-                    raise ValueError("max_time cannot be None if self is not a 3D array")
-                obj = np.repeat( input_array[np.newaxis,:,:,:].astype(np.uint8), max_time , axis = 0)
-            elif len(input_array.shape) == 4 and input_array.shape[2] == 3:
-                obj = input_array.astype(np.uint8)
-            else :
-                raise ValueError("Array shape not understood. Make sure it matches requirements stated in documentation")
-        else :
-            raise ValueError("Missing arguments")
-        
-        _local_root = os.path.join(os.path.dirname(os.path.dirname(__file__)),"memaps")
-        memobj = super().__new__(cls,obj,dtype = kwargs.pop("dtype",np.uint8),root = kwargs.pop("root",_local_root),**kwargs)
-        memobj._array_type = array_type
-        memobj._max_time = max_time
-        return memobj
-    
-#### THIS  IS PROBABLY THE RESPONSIBLE PART FOR BOTH CUDA INCOMPATIBILITIES AND MAX COMPUTER CRASHES...
-# try :
-#     _pass_memset
-# except NameError:
-#     assign_job(create_job())
-#     limit_memory(10000 * 1024 * 1024) #10GB memory Max
-#     _pass_memset = None
-    
     
 class vignette_object():
     """
@@ -167,9 +24,7 @@ class vignette_object():
     """
     
     def __init__(self,_object,parent = None):
-        if isinstance(_object,array_video_color):
-            self.type = "memap"
-        elif isinstance(_object,np.ndarray):
+        if isinstance(_object,np.ndarray):
             self.type= "array"
         elif isinstance(_object,readers.DefaultReader):
             self.type = "reader"
@@ -250,6 +105,7 @@ class VariableFrameProvider():
     def __init__(self,**variables):
         for key, value in variables.items():
             setattr(self,key,value)
+
     def get_shape(self):
         try :
             return self.get_frame(0).shape[0:2]
@@ -257,6 +113,16 @@ class VariableFrameProvider():
             raise("No method to get frames has been bound to this instance. Be sure to call 'instance.bound(function)' on every of your instances. Function should take as input an index and return the frame accordingly")
     
 class VignetteBuilder():
+    """
+    A class for creating video mosaics or aggregated videos from multiple video sources.
+
+    Attributes:
+        add_video (method): Adds a video to the mosaic.
+        frame (method): Returns composite frame at the given index. 
+        frames (method): Generator that returns each frame of the composite video.
+        close (method): Closes the video objects associated with the builder.
+        get_total_duration (method): Returns the total duration of video.
+    """
         
     def __init__(self,layout_style = "grid", **kwargs) :
         """
@@ -290,17 +156,19 @@ class VignetteBuilder():
     ### PARAMETERS SETTERS
                 
     def set_layout(self, layout_style, *args, **kwargs ):
-        """
-        layout_style : string
-            possible values :
-            - "grid"
-                in that case, accepts arguments :
+        """_summary_
+
+        Args:
+            layout_style (string): _description_
+                possible values :
+                - "grid"
+                    in that case, accepts arguments :
                     - columns 
                     - lines
                     To force the number of lines or columns. 
                     Note that the given target_aspect_ratio will not be taken into account in that case
                     - target_ar , the target aspect ratio, defaults to 16/9
-            - "snappy"
+                - "snappy"
                 in that case, accepts arguments :
                     - alignment 
                         with values "hori", "horizontal", "vert" or "vertical"
@@ -308,42 +176,73 @@ class VignetteBuilder():
                     - fit_to, index of object to fit to (dimension of the object fitted will depend of alignment)
                     - first_object, index of first_object 
                        (object labelled first = left or top, so the second = right or bottom in layout)
-
-        Returns:
-            None.
-
-        """
+        """        
         self.layout = layout_style
         self.layout_args = [args,kwargs]
         self._layout_ready = False
         
     def set_max_size(self, max_size = 1000,**extras):
+        """_summary_
+
+        Args:
+            max_size (int, optional): _description_. Defaults to 1000.
+        """
         self.maxwidth = self.maxheight = max_size
         self._layout_ready = False
         
     def set_border(self,border = 0,**extras):
+        """_summary_
+
+        Args:
+            border (int, optional): _description_. Defaults to 0.
+        """
         self.border = border
         self._layout_ready = False
         
     def set_spacing(self,padding = 0,**extras):
+        """_summary_
+
+        Args:
+            padding (int, optional): _description_. Defaults to 0.
+        """
         self.padding = padding
         self._layout_ready = False
         
     set_padding = set_spacing #alternative name for backward compatibility
         
     def set_bg_color(self,bg_color=0,**extras):
+        """_summary_
+
+        Args:
+            bg_color (int, optional): _description_. Defaults to 0.
+        """
         self.bg_color = bg_color
         
     def set_resize_algorithm(self,resize_algorithm = cv2.INTER_AREA ,**extras):
+        """_summary_
+
+        Args:
+            resize_algorithm (_type_, optional): _description_. Defaults to cv2.INTER_AREA.
+        """
         self.resize_algorithm = resize_algorithm
                 
     def set_first_object(self,first_object = 0,**extras):
+        """_summary_
+
+        Args:
+            first_object (int, optional): _description_. Defaults to 0.
+        """
         #first_object = fist object index
         self._f_o = first_object #first_object
         self.layout_args[1].update({"first_object":first_object})
         self._layout_ready = False 
     
     def set_fit_to(self,fit_to = 0,**extras):
+        """_summary_
+
+        Args:
+            fit_to (int, optional): _description_. Defaults to 0.
+        """
         #fit_to : index of object to fit the other one to. The dimension that will be fited depends on shappy layout's orientation
         self._fit_to = fit_to
         self.layout_args[1].update({"fit_to":fit_to})
@@ -370,7 +269,13 @@ class VignetteBuilder():
 
     ### MAIN EXTERNAL METHODS
 
-    def add_video(self,_object,**kwargs):
+    def add_video(self,_object,
+                  array_mode = None,
+                  sampling_rate_multiplier = 1,
+                  time_offset = 0,
+                  transform_func = dummy_patch_processor,
+                  memmapping = False, 
+                  **kwargs):
         """
         Add a video to create a mosaic. Order of addition matters for grid layout. It can be tuned for snappy layout 
         (if snappy = only 2 videos, no more, no less. One can create snappy layouts with more than 2 videos by stacking builders, see tutorial)
@@ -424,12 +329,12 @@ class VignetteBuilder():
             _object = np.repeat( _object[:,:,np.newaxis,:] , 2, axis = 2 )
             set_static = True
             
-        self.sampling_rate_multipliers.append( kwargs.pop("sampling_rate_multiplier",1) )
-        self.time_offsets.append( kwargs.pop("time_offset",0))
-        self.post_transforms.append(kwargs.pop("transform_func", dummy_patch_processor ))
-        memmapping = kwargs.pop("memmap_mode", False)
+        self.sampling_rate_multipliers.append( sampling_rate_multiplier )
+        self.time_offsets.append( time_offset )
+        self.post_transforms.append( transform_func )
         if memmapping and isinstance(_object,np.ndarray):
-            _object = array_video_color(_object,**kwargs)
+            raise DeprecationWarning
+            #_object = array_video_color(_object,**kwargs)
         vobj = vignette_object(_object, self)
         if set_static :
             vobj.set_static(True)
@@ -742,5 +647,5 @@ if __name__ == "__main__" :
     for video in videos :
         vid = np.random.rand(1000,1000)*255
         vb.add_video( vid, max_time = 500, array_type = "2D_bw")
-        #vb.add_video( pImage.AutoVideoReader(video).frames() )
+        #vb.add_video( pImage.VideoReader(video).frames() )
     vb.set_layout("grid")

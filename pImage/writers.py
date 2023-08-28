@@ -35,15 +35,18 @@ def select_extension_writer(file_path):
     else :
         raise NotImplementedError("File extension/CODEC not supported yet")
 
-
-class AutoVideoWriter:
-    
+class VideoWriter:
+    """
+    This class, based on the file path extension provided, automatically selects and instantiates the appropriate video writer class.
+    """
     def __new__(cls,path,**kwargs):
         selected_writer_class = select_extension_writer(path)
         return selected_writer_class(path,**kwargs)
 
 class DefaultWriter:
-    
+    """
+    This is the base video writer class, providing a common interface and flow for video writing. Specific video writer classes can inherit from this and override methods as needed.
+    """
     ############## Methods that needs to be overriden :      
     def __init__(self,**kwargs):
         pass
@@ -73,7 +76,7 @@ class DefaultWriter:
         """
         writes to disk all available frames from a yielder.
         The yielder can be anything providing valid image data, (in a consistant manner from the first frame to the last the writer recieved)
-        It's intended to be used specifically with a reader (reader = pImage.AutoVideoReader(videopath)) and method reader.frames() (in this case it gives all the frames available)
+        It's intended to be used specifically with a reader (reader = pImage.VideoReader(videopath)) and method reader.frames() (in this case it gives all the frames available)
         or reader.sequence(start,stop) (in this case it gives frames between frame 'start' and frame 'stop' supplied as integers)
         """
         def activity_bar(l_index):#just a subclass to handle an activitybar made of small dots "moving", to see if the process crashes.
@@ -97,7 +100,9 @@ class DefaultWriter:
         self._write_frame(array)
 
 class OpenCVWriter(DefaultWriter):
-
+    """
+    OpenCVWriter inherits from DefaultWriter and uses OpenCV VideoWriter to create videos. The writer can be customized using various parameters provided as kwargs while initializing the writer.
+    """
     def __init__(self,path,**kwargs):
         """
         Creates an object that contains all parameters to create a video,
@@ -180,9 +185,8 @@ class OpenCVWriter(DefaultWriter):
         
 class AviWriter(OpenCVWriter):
     """
+    AviWriter inherits from OpenCVWriter, and is specifically for writing .avi video files. It provides less quality reduction and results in relatively larger files.
     Has the huge advantage of being able to terminate file almost propery if not closed.
-    Also has a low quality reduction. Results in quite big videos compared to the other codecs.
-    Reduction is still orgers of magnitude better than uncompressed data, as we usually record "static background" videos on our setups.
     """
     def __init__(self,path,**kwargs):
         super().__init__(path,**kwargs)
@@ -190,16 +194,18 @@ class AviWriter(OpenCVWriter):
         self.fourcc = VideoWriter_fourcc(*self.codec)
         
 class MP4Writer(OpenCVWriter):
-    
+    """
+    MP4Writer inherits from OpenCVWriter, and is specifically for writing .mp4 or .m4v video files.
+    """
     def __init__(self,path,**kwargs):
         super().__init__(path,**kwargs)
         self.codec = kwargs.get("codec", "mp4v")
         self.fourcc = VideoWriter_fourcc(*self.codec)
 
 class MKVWriter(OpenCVWriter):
-    """ 
-    writer based on the DIVX codec. From the selection of this lib, one of the most disk-space efficient way to store videos
-    But results in a loss of quality. Use for presentations with light videos and such. Avoid using for further data analysis.
+    """
+    MKVWriter inherits from OpenCVWriter, and is specifically for writing .mkv video files. The DIVX codec used by this writer provides high disk-space efficiency but might result in quality loss.
+    Use for presentations with light videos. Avoid using for data analysis.
     """
     def __init__(self,path,**kwargs):
         super().__init__(path,**kwargs)
@@ -207,10 +213,14 @@ class MKVWriter(OpenCVWriter):
         self.fourcc = VideoWriter_fourcc(*self.codec)
 
 class TiffWriter(DefaultWriter):
+    """
+    TiffWriter inherits from DefaultWriter, and is specifically for writing .tiff image files. Notably, it uses libtiff to create single frame TIFF images.
+    """
     try :
         from libtiff import TIFF as tiff_writer
     except ImportError as e:
-        tiff_writer = e
+        warnings.warn("Could not import libtiff. You will not be able to use TiffWriter")
+
     def __init__(self,path,**kwargs):
         self.path =  os.path.dirname(path)
         self.file_prefix = os.path.splitext(os.path.basename(path))[0]
@@ -229,10 +239,10 @@ class TiffWriter(DefaultWriter):
         tiff_writer.close()
         self.index += 1
 
-
-
 class GifWriter(DefaultWriter):
-    
+    """
+    GifWriter inherits from DefaultWriter, and is specifically for creating GIFs. This writer accumulates frames and stores them in a GIF format. It allows customization such as framerate, seamless looping, optimization, etc.
+    """  
     def __init__(self,path,**kwargs):
         self.path = path
         self.frame_bank = []

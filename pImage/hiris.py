@@ -9,8 +9,7 @@ import os,sys
 import numpy as np
 import re, configparser
 
-sys.path.append(os.path.dirname(__file__))
-from readers import DefaultReader
+from .readers import DefaultReader
 
 class HirisReader(DefaultReader):
     
