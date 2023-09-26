@@ -19,7 +19,7 @@ Created on Tue Oct 12 18:54:37 2021
 
 import os, warnings
 import numpy as np
-from cv2 import VideoWriter, VideoWriter_fourcc
+from cv2 import VideoWriter as CV2VideoWriter, VideoWriter_fourcc
 from cv2 import cvtColor, COLOR_RGB2BGR, COLOR_HSV2BGR, COLOR_BGRA2BGR, COLOR_RGBA2BGR
 
 def select_extension_writer(file_path):
@@ -169,7 +169,7 @@ class OpenCVWriter(DefaultWriter):
         if self.file_handle is None :
             
             self.size = np.shape(array)[1], np.shape(array)[0]
-            self.file_handle = VideoWriter(self.path, self.fourcc, self.fps, self.size, True)#color is always True because...
+            self.file_handle = CV2VideoWriter(self.path, self.fourcc, self.fps, self.size, True)#color is always True because...
 
         frame = array.astype(self.dtype)
         if len(frame.shape) < 3 :

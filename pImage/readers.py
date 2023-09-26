@@ -21,7 +21,7 @@ def _readers_factory(file_path,**kwargs):
             import hiris
             return hiris.HirisReader
         except ImportError :
-            raise hiris("hiris.py not available in library folder")
+            raise ImportError("hiris.py not available in library folder")
     elif extension == ".avi" :
         class AviReader(base):
             pass
@@ -97,15 +97,14 @@ class DefaultReader:
         self._check_frame_id(start)
         self._check_frame_id(stop-1)
             
+        prog = False
         if stop-start > 100 : 
             try : 
                 import pyprind
                 bar = pyprind.ProgBar(stop-start)
                 prog = True
             except ImportError :
-                prog = False
-        else :
-            prog = False
+                pass
         
         for i in range(start,stop):
             if prog :
