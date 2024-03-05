@@ -48,7 +48,7 @@ def _readers_factory(file_path, **kwargs):
 class VideoReader:
     # do not inherit from this class. It only returns other classes factories.
     def __new__(cls, path, **kwargs):
-        from transformations import TransformingReader, available_transforms
+        from .transformations import TransformingReader, available_transforms
 
         if set(kwargs.keys()).intersection(available_transforms):
             return TransformingReader(path, **kwargs)
