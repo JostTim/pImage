@@ -20,7 +20,7 @@ def get_version(rel_path):
 
 
 setup(
-    name="pImage",
+    name="easimage",
     version=get_version(Path("pImage", "__init__.py")),
     packages=find_packages(),
     url="https://github.com/JostTim/pImage",
@@ -42,5 +42,5 @@ setup(
     ],
     install_requires=["numpy>=1.23", "opencv-python>=4.6", "ffmpeg>=1.4", "tifffile>=2022.10"],
     entry_points={},
-    scripts={},
+    scripts=[],
 )
