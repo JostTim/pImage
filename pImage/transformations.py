@@ -26,6 +26,9 @@ import cv2
 import numpy as np
 import math
 
+from typing import List, Tuple, Optional
+from numpy.typing import NDArray
+
 from .readers import _readers_factory
 from .blend_modes import *
 
@@ -128,20 +131,28 @@ def TransformingReader(path, **kwargs):
     return TransformingPolymorphicReader(path, **kwargs)
 
 
-def rescale_to_8bit(input_array, vmin=None, vmax=None, fullrange=False):
+def rescale_to_8bit(input_array, vmin=None, vmax=None, fullrange=False, convert_nan_to=0):
     # try to find vmin vmax from input array dtype
 
+    image_array = input_array.copy()
+
     if vmin is None or vmax is None:
-        _vmin, _vmax = get_array_minmax(input_array, fullrange)
+        _vmin, _vmax = get_array_minmax(image_array, fullrange)
         if vmin is None:
             vmin = _vmin
         if vmax is None:
             vmax = _vmax
 
+    nanmask = np.isnan(image_array)
+    image_array[nanmask] = np.nanmin(image_array)
+
     try:
-        return np.interp(input_array.data, (vmin, vmax), (0, 255)).astype(np.uint8)
+        rescaled_array = np.interp(image_array.data, (vmin, vmax), (0, 255)).astype(np.uint8)
     except AttributeError:  # 'memoryview' object has no attribute 'data'
-        return np.interp(input_array, (vmin, vmax), (0, 255)).astype(np.uint8)
+        rescaled_array = np.interp(image_array, (vmin, vmax), (0, 255)).astype(np.uint8)
+
+    rescaled_array[nanmask] = convert_nan_to
+    return rescaled_array
 
 
 def get_array_minmax(input_array, fullrange=False):
@@ -153,8 +164,8 @@ def get_array_minmax(input_array, fullrange=False):
             vmin = np.finfo(input_array.dtype).min
             vmax = np.finfo(input_array.dtype).max
     else:
-        vmin = input_array.min()
-        vmax = input_array.max()
+        vmin = np.nanmin(input_array)
+        vmax = np.nanmax(input_array)
     return vmin, vmax
 
 
@@ -207,6 +218,24 @@ def sequence_gray_to_color(
     mask_color=0,
     time_dimension=2,
 ):
+    """Converts a sequence of grayscale images to a color representation.
+
+    Args:
+        sequence (np.ndarray): A multi-dimensional array representing a sequence of grayscale images.
+        vmin (float, optional): Minimum value for normalization. If None, will be determined from the sequence.
+        vmax (float, optional): Maximum value for normalization. If None, will be determined from the sequence.
+        fullrange (bool, optional): If True, uses the full range of the colormap. Defaults to False.
+        cmap (int, optional): OpenCV colormap to use for color mapping. Defaults to cv2.COLORMAP_JET.
+        reverse (bool, optional): If True, reverses the colormap. Defaults to False.
+        mask_where (np.ndarray, optional): A boolean array indicating where to apply the mask.
+            Must match the shape of the grayscale images.
+        mask_color (int, optional): Color to use for masked areas. Defaults to 0.
+        time_dimension (int, optional): The index of the time dimension in the sequence. Defaults to 2.
+
+    Returns:
+        np.ndarray: A multi-dimensional array of the same shape as the input sequence,
+            with the grayscale images converted to color.
+    """
 
     def dimension_iterator(i):
         slicer = [slice(None)] * len(sequence.shape)
@@ -233,6 +262,56 @@ def sequence_gray_to_color(
         )
 
     return np.array(color_sequence) if time_dimension == 0 else np.moveaxis(np.array(color_sequence), 0, time_dimension)
+
+
+def gray_to_RBG_layers(
+    sequence_or_grays: List[NDArray[np.number]],
+    rescale_min_max: Tuple[Optional[np.number], Optional[np.number]] = (None, None),
+    ensure_valid: bool = True,
+) -> NDArray[np.uint8]:
+    """Converts a sequence of grayscale images to RGB layers.
+
+    This function takes a list of grayscale images (as numpy arrays) and converts them into RGB layers.
+    It can optionally rescale the pixel values to a specified range and ensures that the resulting stacked
+    array has a valid number of layers.
+
+    Args:
+        sequence_or_grays (list[np.ndarray]): A list of grayscale images represented as numpy arrays.
+        rescale_min_max (tuple[float, float], optional): A tuple specifying the minimum and maximum
+            values for rescaling. If both values are None, the function will determine the best
+            exposure from the first image. Defaults to (None, None).
+        ensure_valid (bool, optional): If True, the function checks that the resulting
+            stacked array has between 3 and 4 layers (inclusive).
+            Raises a ValueError if this condition is not met. Defaults to True.
+
+    Returns:
+        np.ndarray: A numpy array containing the stacked RGB layers.
+
+    Raises:
+        ValueError: If the number of layers in the resulting stacked array is less than
+            3 or greater than 4 when ensure_valid is True.
+    """
+
+    rescaled_arrays = []
+    for array in sequence_or_grays:
+        if all([value is None for value in rescale_min_max]):
+            rescale_min_max = find_best_exposure(array)
+        rescaled_arrays.append(rescale_to_8bit(array, *rescale_min_max))
+
+    stacked = np.moveaxis(np.array(rescaled_arrays), 0, 2)
+
+    if ensure_valid and stacked.shape[2] > 4:
+        raise ValueError(
+            "More than 4 layers (max is RGBA). reduce number of layers (images) in your sequence_or_grays, "
+            "or set ensure_valid if this is intended"
+        )
+    if ensure_valid and stacked.shape[2] < 3:
+        raise ValueError(
+            "Less than 3 layers (minimum is RGB). increase number of layers (images) in your sequence_or_grays, "
+            "or set ensure_valid if this is intended"
+        )
+
+    return stacked
 
 
 def annotate_image(
@@ -687,8 +766,8 @@ def find_best_exposure(image, method="percentile", pmin=2, pmax=98):
 
     elif method == "percentile":
 
-        vmin = np.percentile(image, pmin)
-        vmax = np.percentile(image, pmax)
+        vmin = np.nanpercentile(image, pmin)
+        vmax = np.nanpercentile(image, pmax)
 
     else:
         raise ValueError(f"unknown method '{method}' for find_best_exposure")

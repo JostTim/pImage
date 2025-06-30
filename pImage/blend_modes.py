@@ -118,6 +118,10 @@ def gray_to_4_layer(image, apply_to="red,green,blue", *, vmin=None, vmax=None, d
     Converts the given grayscale image to a 4-layered RGB image (addition of alpha channel to represent transparency).
     The luminance (min and max) of the resulting image can be controlled by the parameters 'vmin' and 'vmax'.
     The 'apply_to' parameter is used for specifying the desired color channels.
+    You can for example make a 4 layer blue image from a gray one, by only applying apply_to="blue".
+    The red and green channel will al be zeros, while the blue will be the luminance of yout gray image.
+    You can also apply your gray image to the alpha channel (if you want to play with transparency)
+    You can combine what your gray get applied to by doing : apply_to="alpha,blue,red" for example. Order doesn't matter
 
     Args:
         image (ndarray): A Grayscale image whose max value needs to find.
