@@ -1,10 +1,10 @@
 [project]
 name = "easimage"
+version = "2.0.4"
 description = "Image and video management for research use, in an unified easy to use API"
 authors = [
     { name = "Timothe Jost-Mousseau", email = "timothe.jost-mousseau@pasteur.com" },
 ]
-url = "https://github.com/JostTim/pImage"
 dependencies = [
     "numpy>=1.23",
     "opencv-python>=4.6",
@@ -14,14 +14,20 @@ dependencies = [
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
-dynamic = ["version"]
+
+[project.urls]
+github = "https://github.com/JostTim/pImage"
+pypi = "https://pypi.org/project/easimage/"
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.pdm]
-distribution = true
+[tool.hatch.build.targets.wheel]
+packages = ["pImage"]
+
+[tool.uv]
+package = true
 
 [tool.pdm.version]
 source = "file"
@@ -33,3 +39,25 @@ ignore = ["F403", "E401"]
 
 [tool.ruff]
 line-length = 120
+
+[tool.bumpversion]
+files = [
+    { filename = "pImage/__init__.py", search = "__version__ = \"{current_version}\"", replace = "__version__ = \"{new_version}\"" },
+    { filename = "pyproject.toml", search = "version = \"{current_version}\"", replace = "version = \"{new_version}\"" },
+]
+current_version = "2.0.4"
+regex = false
+ignore_missing_version = false
+ignore_missing_files = false
+tag = false
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = true
+commit = false
+message = "Bump version: {current_version} → {new_version}"
+moveable_tags = []
+commit_args = "--no-verify"
+setup_hooks = []
+pre_commit_hooks = []
+post_commit_hooks = []
