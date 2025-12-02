@@ -1,6 +1,6 @@
 [project]
 name = "easimage"
-version = "3.0.2"
+version = "3.0.3"
 description = "Image and video management for research use, in an unified easy to use API"
 authors = [
     { name = "Timothe Jost-Mousseau", email = "timothe.jost-mousseau@pasteur.com" },
@@ -45,7 +45,7 @@ files = [
     { filename = "pImage/__init__.py", search = "__version__ = \"{current_version}\"", replace = "__version__ = \"{new_version}\"" },
     { filename = "pyproject.toml", search = "version = \"{current_version}\"", replace = "version = \"{new_version}\"" },
 ]
-current_version = "3.0.2"
+current_version = "3.0.3"
 regex = false
 ignore_missing_version = false
 ignore_missing_files = false
