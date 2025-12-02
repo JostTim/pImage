@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-__version__ = "2.0.3"
+# pImage.__init__.py
+
+__version__ = "3.0.1"
+__all__ = ["interact", "mosaics", "pillow", "pillow_draw"]
 
 from .image import *
 from .converters import *
@@ -10,7 +13,23 @@ from . import interact
 from . import mosaics
 
 try:
-    from PIL import Image as pillow
-    from PIL import ImageDraw as pillow_draw
+    import PIL.Image as pillow
+    import PIL.ImageDraw as pillow_draw
 except ImportError:
-    pass
+    pillow = None
+    pillow_draw = None
+
+import warnings
+
+
+def __getattr__(name):
+    import importlib
+
+    if name in ["readers", "writers", "converters"]:
+        warnings.warn(
+            f"Accessing 'pImage.{name}' is deprecated. Please use 'pImage.video.{name}' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return importlib.import_module(f".video.{name}", __package__)
+    raise AttributeError(f"module {__name__} has no attribute {name}")

@@ -29,7 +29,7 @@ import math
 from typing import List, Tuple, Optional
 from numpy.typing import NDArray
 
-from .readers import _readers_factory
+from .video.readers import _readers_factory
 from .blend_modes import *
 
 available_transforms = {
@@ -48,11 +48,9 @@ available_transforms = {
 
 
 def TransformingReader(path, **kwargs):
-
     selected_reader_class = _readers_factory(path, **kwargs)
 
     class TransformingPolymorphicReader(selected_reader_class):
-
         callbacks = []
 
         rotation_amount = kwargs.pop("rotate", False)
@@ -67,8 +65,14 @@ def TransformingReader(path, **kwargs):
         clahe = kwargs.pop("clahe", False)
         sharpen_value = kwargs.pop("sharpen", None)
         # parameters for clahe auto set below if not supplied
-        if (clahe and isinstance(clahe, bool)) or "clipLimit" in kwargs.keys() or "tileGridSize" in kwargs.keys():
-            clahe = cv2.createCLAHE(kwargs.pop("clipLimit", 8), kwargs.pop("tileGridSize", (5, 5)))
+        if (
+            (clahe and isinstance(clahe, bool))
+            or "clipLimit" in kwargs.keys()
+            or "tileGridSize" in kwargs.keys()
+        ):
+            clahe = cv2.createCLAHE(
+                kwargs.pop("clipLimit", 8), kwargs.pop("tileGridSize", (5, 5))
+            )
         if crop_params:
             try:
                 crop_params = make_crop_params(**crop_params)
@@ -83,7 +87,10 @@ def TransformingReader(path, **kwargs):
             if self.resize:
                 frame = cv2.resize(
                     frame,
-                    (int(frame.shape[1] * self.resize), int(frame.shape[0] * self.resize)),
+                    (
+                        int(frame.shape[1] * self.resize),
+                        int(frame.shape[0] * self.resize),
+                    ),
                     interpolation=cv2.INTER_AREA,
                 )
             if self.clahe:
@@ -98,7 +105,11 @@ def TransformingReader(path, **kwargs):
             if self.gamma is not None:
                 frame = gamma(frame, self.gamma, self.inv_gamma)
             if self.annotate_params:
-                frame = annotate_image(frame, self.annotate_params["text"], **self.annotate_params["params"])
+                frame = annotate_image(
+                    frame,
+                    self.annotate_params["text"],
+                    **self.annotate_params["params"],
+                )
             if self.sharpen_value is not None:
                 frame = sharpen_img(frame, self.sharpen_value)
 
@@ -107,7 +118,9 @@ def TransformingReader(path, **kwargs):
 
             return frame
 
-        def add_callback(self, function):  # you can add your own callbacks to a transformingreader
+        def add_callback(
+            self, function
+        ):  # you can add your own callbacks to a transformingreader
             # they shoudl be functions that take a frame as input and give back a frame as output
             # the second argument they take is the reader itself,
             # so that you can implement your own arguments and values withing the function
@@ -131,7 +144,9 @@ def TransformingReader(path, **kwargs):
     return TransformingPolymorphicReader(path, **kwargs)
 
 
-def rescale_to_8bit(input_array, vmin=None, vmax=None, fullrange=False, convert_nan_to=0):
+def rescale_to_8bit(
+    input_array, vmin=None, vmax=None, fullrange=False, convert_nan_to=0
+):
     # try to find vmin vmax from input array dtype
 
     image_array = input_array.copy()
@@ -147,7 +162,9 @@ def rescale_to_8bit(input_array, vmin=None, vmax=None, fullrange=False, convert_
     image_array[nanmask] = np.nanmin(image_array)
 
     try:
-        rescaled_array = np.interp(image_array.data, (vmin, vmax), (0, 255)).astype(np.uint8)
+        rescaled_array = np.interp(image_array.data, (vmin, vmax), (0, 255)).astype(
+            np.uint8
+        )
     except AttributeError:  # 'memoryview' object has no attribute 'data'
         rescaled_array = np.interp(image_array, (vmin, vmax), (0, 255)).astype(np.uint8)
 
@@ -258,10 +275,16 @@ def sequence_gray_to_color(
         else:
             mask = None
         color_sequence.append(
-            array_gray_to_color(sequence[slicer], vmin, vmax, fullrange, cmap, reverse, mask, mask_color)
+            array_gray_to_color(
+                sequence[slicer], vmin, vmax, fullrange, cmap, reverse, mask, mask_color
+            )
         )
 
-    return np.array(color_sequence) if time_dimension == 0 else np.moveaxis(np.array(color_sequence), 0, time_dimension)
+    return (
+        np.array(color_sequence)
+        if time_dimension == 0
+        else np.moveaxis(np.array(color_sequence), 0, time_dimension)
+    )
 
 
 def gray_to_RBG_layers(
@@ -315,7 +338,15 @@ def gray_to_RBG_layers(
 
 
 def annotate_image(
-    input_array, text, x=5, y=5, fontsize=100, font="arial.ttf", color="black", shadow_color=False, shadow_size=None
+    input_array,
+    text,
+    x=5,
+    y=5,
+    fontsize=100,
+    font="arial.ttf",
+    color="black",
+    shadow_color=False,
+    shadow_size=None,
 ):
     """
     Parameters
@@ -360,8 +391,12 @@ def annotate_image(
         if shadow_size is None:
             shadow_size = 5
         shadow_font = ImageFont.truetype(font, fontsize + (shadow_size * 1))
-        for i, j in itertools.product((-shadow_size, 0, shadow_size), (-shadow_size, 0, shadow_size)):
-            ImageDraw.Draw(_temp_image).text((x + i, y + j), text, fill=shadow_color, font=shadow_font)
+        for i, j in itertools.product(
+            (-shadow_size, 0, shadow_size), (-shadow_size, 0, shadow_size)
+        ):
+            ImageDraw.Draw(_temp_image).text(
+                (x + i, y + j), text, fill=shadow_color, font=shadow_font
+            )
 
     default_font = ImageFont.truetype(font, fontsize)
     ImageDraw.Draw(_temp_image).text((x, y), text, fill=color, font=default_font)
@@ -370,7 +405,6 @@ def annotate_image(
 
 
 def annotate_sequence(sequence, text, time_dimension=2, **kwargs):
-
     def dimension_iterator(i):
         slicer = [slice(None)] * len(sequence.shape)
         slicer[time_dimension] = i
@@ -378,9 +412,15 @@ def annotate_sequence(sequence, text, time_dimension=2, **kwargs):
 
     anno_sequence = []
     for i in range(sequence.shape[time_dimension]):
-        anno_sequence.append(annotate_image(sequence[dimension_iterator(i)], text, **kwargs))
+        anno_sequence.append(
+            annotate_image(sequence[dimension_iterator(i)], text, **kwargs)
+        )
 
-    return np.array(anno_sequence) if time_dimension == 0 else np.moveaxis(np.array(anno_sequence), 0, time_dimension)
+    return (
+        np.array(anno_sequence)
+        if time_dimension == 0
+        else np.moveaxis(np.array(anno_sequence), 0, time_dimension)
+    )
 
 
 def make_crop_params(*args, **kwargs):
@@ -390,14 +430,20 @@ def make_crop_params(*args, **kwargs):
         kwargs.update({"value": args[0]})
 
     def set_value_if_not_none(sval):
-        return kwargs.get(sval) if kwargs.get(sval, None) is not None else kwargs.get("value", None)
+        return (
+            kwargs.get(sval)
+            if kwargs.get(sval, None) is not None
+            else kwargs.get("value", None)
+        )
 
     sides = ["top", "bottom", "left", "right"]
     values = []
     for side in sides:
         _val = set_value_if_not_none(side)
         if _val is None:
-            raise ValueError(f"Must specify at least a general value if specific {side} argument is missing")
+            raise ValueError(
+                f"Must specify at least a general value if specific {side} argument is missing"
+            )
         values.append(_val)
     return values
 
@@ -431,12 +477,16 @@ def binarize(image, threshold, boolean=True):
 
 def crop(array, *args, **kwargs):
     values = make_crop_params(*args, **kwargs)
-    return array[values[0] : array.shape[0] - values[1], values[2] : array.shape[1] - values[3]]
+    return array[
+        values[0] : array.shape[0] - values[1], values[2] : array.shape[1] - values[3]
+    ]
 
 
 def contrast_brightness(array, alpha, beta):
     # alpha = contrast, beta = brightness
-    return (np.clip((array.astype(np.int16) * alpha) + beta, a_min=0, a_max=255)).astype(np.uint8)
+    return (
+        np.clip((array.astype(np.int16) * alpha) + beta, a_min=0, a_max=255)
+    ).astype(np.uint8)
 
 
 def gamma(array, gamma, inv=True):
@@ -460,7 +510,9 @@ def apply_lut(array, lut):
 def make_lut_gamma(gamma, inv_gamma=True):
     if inv_gamma:
         gamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 255)]).astype("uint8")
+    table = np.array([((i / 255.0) ** gamma) * 255 for i in np.arange(0, 255)]).astype(
+        "uint8"
+    )
     return table
 
 
@@ -594,7 +646,9 @@ def gaussian(frame, value):
     """
     from skimage import filters
 
-    frame = filters.gaussian(frame, sigma=(value, value), truncate=6, preserve_range=True).astype("uint8")
+    frame = filters.gaussian(
+        frame, sigma=(value, value), truncate=6, preserve_range=True
+    ).astype("uint8")
     return frame
 
 
@@ -612,7 +666,9 @@ def convert_scale(img, alpha, beta):
 
 
 # Automatic brightness and contrast optimization with optional histogram clipping
-def automatic_brightness_and_contrast(image, clip_hist_percent=25, return_metrics=False):
+def automatic_brightness_and_contrast(
+    image, clip_hist_percent=25, return_metrics=False
+):
     try:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     except Exception:
@@ -701,12 +757,21 @@ def compute_transform_matrix(image, dx, dy, angle, tfirst=False):
         numpy.ndarray: The resulting transformation matrix.
     """
     Matrix_r = np.vstack(
-        (cv2.getRotationMatrix2D((image.shape[0] / 2, image.shape[1] / 2), angle, 1.0), np.array([0, 0, 1]))
+        (
+            cv2.getRotationMatrix2D(
+                (image.shape[0] / 2, image.shape[1] / 2), angle, 1.0
+            ),
+            np.array([0, 0, 1]),
+        )
     )
     Matrix_t = np.vstack((np.array([[1, 0, dx], [0, 1, dy]]), np.array([0, 0, 1])))
     if tfirst:
-        return np.matmul(Matrix_r, Matrix_t)[:2, :]  # translation then rotation, change order to do otherwise
-    return np.matmul(Matrix_t, Matrix_r)[:2, :]  # rotation then translation, change order to do otherwise
+        return np.matmul(Matrix_r, Matrix_t)[
+            :2, :
+        ]  # translation then rotation, change order to do otherwise
+    return np.matmul(Matrix_t, Matrix_r)[
+        :2, :
+    ]  # rotation then translation, change order to do otherwise
 
 
 def affine_transform(array, dx, dy, angle, tfirst=False, bordervalue=0):
@@ -765,7 +830,6 @@ def find_best_exposure(image, method="percentile", pmin=2, pmax=98):
         vmax = min(255, Q3 + 1.5 * iqr)
 
     elif method == "percentile":
-
         vmin = np.nanpercentile(image, pmin)
         vmax = np.nanpercentile(image, pmax)
 
@@ -813,5 +877,4 @@ def flat_field_correction(image, flat_field=None, gaussian=None):
 
 
 if __name__ == "__main__":
-
     test = TransformingReader("tes.avi", rotate=1)
