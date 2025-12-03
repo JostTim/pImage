@@ -222,7 +222,7 @@ class ZarrVignetteObject(ArrayBasedVignetteObject):
         return zarr_buffer
 
 
-class ReaderVignetteObject(ArrayBasedVignetteObject):
+class ReaderVignetteObject(VignetteObject):
     object_type = "reader"
     object: "DefaultReader"
 
@@ -232,6 +232,24 @@ class ReaderVignetteObject(ArrayBasedVignetteObject):
     @property
     def shape(self) -> Tuple[int, ...]:
         return (self.height, self.width)
+
+    def get_frame(self, frame_id: int) -> np.ndarray:
+        if self.static_mode:
+            # if static mode, we just return the array, if 2d, it will be made 3D (color layers),
+            # and if 3D, we use colors as provided by the user.
+            frame = self.object.frame(0)
+        elif 0 <= frame_id <= self.get_max_frame_index():
+            frame = self.object.frame(frame_id)
+        else:
+            frame = np.ones(self.shape, dtype=np.uint8) * self.bg_color
+        return ensure_frame_has_color_layers(frame)
+
+    @property
+    def has_color_layers(self) -> bool:
+        return self.object.color
+
+    def close(self):
+        self.object.close()
 
 
 class FunctionVignetteObject(VignetteObject):

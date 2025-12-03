@@ -150,11 +150,7 @@ class DefaultReader:
         except (TypeError, AttributeError):
             _slice = slice(index[2], index[2] + 1)
             time_start, time_stop = _slice.start, _slice.stop
-        return np.squeeze(
-            np.moveaxis(np.array(list(self.sequence(time_start, time_stop))), 0, 2)[
-                (index[0], index[1])
-            ]
-        )
+        return np.squeeze(np.moveaxis(np.array(list(self.sequence(time_start, time_stop))), 0, 2)[(index[0], index[1])])
 
     @property
     def width(self):
@@ -186,9 +182,7 @@ class DefaultReader:
 class OpenCVReader(DefaultReader):
     def __init__(self, path, **kwargs):
         if isinstance(cv2, ImportError):
-            raise ImportError(
-                "OpenCV2 cannot be imported sucessfully or is not installed"
-            )
+            raise ImportError("OpenCV2 cannot be imported sucessfully or is not installed")
         super().__init__(path, **kwargs)
         self._internal_index = 0
         self._stored_frame = None
@@ -273,15 +267,11 @@ class FFmpegReader(DefaultReader):
     def __init__(self, path, **kwargs):
         super().__init__(path, **kwargs)
         if self.ffmpeg is None:
-            raise ImportError(
-                "FFMPEG cannot be imported sucessfully or is not installed"
-            )
+            raise ImportError("FFMPEG cannot be imported sucessfully or is not installed")
         self.pix_fmt = kwargs.get("pix_fmt", "gray")
 
     def get_framerate(self):
-        return float(
-            self.ffmpeg.probe(self.path)["streams"][0]["r_frame_rate"].split("/")[0]
-        )
+        return float(self.ffmpeg.probe(self.path)["streams"][0]["r_frame_rate"].split("/")[0])
 
     def _get_time_from_frameno(self, frame_no):
         import datetime
@@ -292,10 +282,7 @@ class FFmpegReader(DefaultReader):
         # imprecise at the number of frames per second
         import datetime
 
-        frame_seconds = (
-            datetime.datetime.strptime(time_str, "%H:%M:%S")
-            - datetime.datetime(1900, 1, 1).total_seconds()
-        )
+        frame_seconds = datetime.datetime.strptime(time_str, "%H:%M:%S") - datetime.datetime(1900, 1, 1).total_seconds()
         return int(frame_seconds * self.get_framerate())
 
     def _get_height_ffmpeg(self):
@@ -324,9 +311,7 @@ class FFmpegReader(DefaultReader):
             .output("pipe:", format="rawvideo", pix_fmt=self.pix_fmt, vframes=frame_nb)
             .run(capture_stdout=True, capture_stderr=True)
         )
-        frames = self.numpy.frombuffer(buffer, self.numpy.uint8).reshape(
-            frame_nb, height, width
-        )
+        frames = self.numpy.frombuffer(buffer, self.numpy.uint8).reshape(frame_nb, height, width)
         for frame_index in range(frames.shape[0]):
             yield frames[frame_index]
 
