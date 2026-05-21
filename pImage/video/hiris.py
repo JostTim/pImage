@@ -5,10 +5,10 @@ Created on Mon May  4 17:28:33 2020
 @author: Timothe
 """
 
-import os, sys
+import os
 import numpy as np
 import re, configparser
-from typing import Any
+from typing import Any, Callable
 
 from .readers import DefaultReader
 
@@ -80,7 +80,7 @@ class HirisSeqFile(dict):
         """
         self.path = file_path
         cfg = configparser.ConfigParser()
-        cfg.optionxform = str
+        cfg.optionxform: Callable[[str], str] = str  # optionxform does .lower() and we are preventing that here
         cfg.read(file_path)
         _tempdict: dict[str, Any] = {
             key: cfg.get(
@@ -153,13 +153,13 @@ class HirisBinFile:
         return buffer.reshape(int(self.seq_file.get("Height")), int(self.seq_file.get("Width")))
 
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    from pathlib import Path
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
+#     from pathlib import Path
 
-    root = Path("F:/Timothe/DATA/BehavioralVideos/Whisker_Video/Whisker_Topview/Expect_3_mush/Mouse66/210503_1")
-    test = HirisReader(root / "2021-05-03T19.19.19/Trial.seq")
-    for index, frame in enumerate(test.frames()):
-        print(index)
-        plt.imshow(frame)
-        plt.show()
+#     root = Path("F:/Timothe/DATA/BehavioralVideos/Whisker_Video/Whisker_Topview/Expect_3_mush/Mouse66/210503_1")
+#     test = HirisReader(root / "2021-05-03T19.19.19/Trial.seq")
+#     for index, frame in enumerate(test.frames()):
+#         print(index)
+#         plt.imshow(frame)
+#         plt.show()
