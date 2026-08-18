@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
+import json
 import os
+from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from enum import Enum
-from tqdm import tqdm
-import numpy as np
-import cv2
-import ffmpeg
+from pathlib import Path
+from typing import Literal, cast
 
+import cv2
+import numpy as np
+from ffmpeg.ffmpeg import FFmpeg
+from tqdm import tqdm
 
 __all__ = [
     "VideoReader",
@@ -17,7 +21,7 @@ __all__ = [
 ]
 
 
-def _readers_factory(file_path, **kwargs):
+def _readers_factory(file_path: str, **kwargs) -> "type[DefaultReader]":
     use_ffmpeg = kwargs.get("use_ffmpeg", False)
     extension = os.path.splitext(file_path)[1]
     if use_ffmpeg:
@@ -26,7 +30,7 @@ def _readers_factory(file_path, **kwargs):
         base = OpenCVReader
     if extension == ".seq":
         try:
-            import hiris
+            from . import hiris
 
             return hiris.HirisReader
         except ImportError:
@@ -63,20 +67,27 @@ class VideoReader:
         return selected_reader_class(path, **kwargs)
 
 
-class DefaultReader:
-    ############## Methods that needs to be overriden :
-    def __init__(self, file_path, **kwargs):
-        self.path = file_path
-        self.color = kwargs.get("color", False)
+class DefaultReader(ABC):
+    path: Path
+    color: bool
 
-    def _get_frame(self, frame_id):
+    ############## Methods that needs to be overriden :
+
+    def __init__(self, path: str | Path, color: bool = False):
+        self.path = Path(path)
+        self.color = color
+
+    @abstractmethod
+    def _get_frame(self, frame_id: int) -> np.ndarray:
         raise NotImplementedError
         # make it return the specific frame
 
+    @abstractmethod
     def _get_all(self):
         raise NotImplementedError
         # make it a yielder for all frames in object (no need for indexing)
 
+    @abstractmethod
     def _get_frames_number(self):
         raise NotImplementedError
         # returns the frames number implementing any calculation needed
@@ -95,7 +106,7 @@ class DefaultReader:
     def __exit__(self, type, value, traceback):
         self.close()
 
-    ############## Methods to keep :
+    ############## Commong methods that need no reimplementation :
     @property
     def frames_number(self):
         try:
@@ -169,29 +180,27 @@ class DefaultReader:
 
 
 class OpenCVReader(DefaultReader):
-    def __init__(self, path, **kwargs):
+    _internal_index: int
+    _stored_frame: np.ndarray | None
+
+    def __init__(self, path: str | Path, color: bool = False):
         if isinstance(cv2, ImportError):
             raise ImportError("OpenCV2 cannot be imported sucessfully or is not installed")
-        super().__init__(path, **kwargs)
+        super().__init__(path, color)
         self._internal_index = 0
         self._stored_frame = None
 
     def open(self):
-        try:
-            return self.file_handle
-        except AttributeError:
+        if not hasattr(self, "file_handle"):
             if self.color:
                 self.file_handle = cv2.VideoCapture(self.path)  # ,cv2.IMREAD_COLOR )
             else:
                 self.file_handle = cv2.VideoCapture(self.path, cv2.IMREAD_GRAYSCALE)
-        finally:
-            return self.file_handle
+        return self.file_handle
 
     def close(self):
-        try:
+        if hasattr(self, "file_handle"):
             self.file_handle.release()
-        except AttributeError:
-            pass
 
     def _get_frames_number(self):
         self.open()
@@ -248,32 +257,53 @@ class FFmpegReader(DefaultReader):
 
     pix_fmt: str
 
-    def __init__(self, path, **kwargs):
-        super().__init__(path, **kwargs)
-        self.pix_fmt = kwargs.get("pix_fmt", "gray")
+    def __init__(
+        self,
+        path: str | Path,
+        color: bool = False,
+        pix_fmt: Literal["gray"] = "gray",
+    ):
+        super().__init__(path, color)
+        self.pix_fmt = pix_fmt
 
-    def get_framerate(self):
-        return float(ffmpeg.probe(self.path)["streams"][0]["r_frame_rate"].split("/")[0])
+    def get_framerate(self) -> float:
+        ffprobe = FFmpeg(executable="ffprobe").input(
+            self.path,
+            print_format="json",
+            show_streams=None,
+        )
+        media_infos = json.loads(ffprobe.execute())
+        return float(media_infos["streams"][0]["r_frame_rate"].split("/")[0])
 
-    def _get_time_from_frameno(self, frame_no):
+    def ffmpeg_probe(self) -> dict:
+        if not hasattr(self, "_ffmpeg_probe"):
+            ffprobe = FFmpeg(executable="ffprobe").input(
+                self.path,
+                print_format="json",
+                show_streams=None,
+            )
+            self._ffmpeg_probe = cast(dict, json.loads(ffprobe.execute()))
+        return self._ffmpeg_probe
+
+    def _get_time_from_frameno(self, frame_no) -> str:
         return str(timedelta(seconds=frame_no / self.get_framerate()))
 
-    def _get_frameno_from_time(self, time_str):
+    def _get_frameno_from_time(self, time_str) -> int:
         # imprecise at the number of frames per second
 
         frame_seconds = (datetime.strptime(time_str, "%H:%M:%S") - datetime(1900, 1, 1)).total_seconds()
         return int(frame_seconds * self.get_framerate())
 
     def _get_height_ffmpeg(self):
-        return ffmpeg.probe(self.path)["streams"][0]["height"]
+        return self.ffmpeg_probe()["streams"][0]["height"]
 
     def _get_width_ffmpeg(self):
-        return ffmpeg.probe(self.path)["streams"][0]["width"]
+        return self.ffmpeg_probe()["streams"][0]["width"]
 
     def _get_frames_number(self):
         return np.inf
 
-    def sequence(self, start=None, stop=None):
+    def sequence(self, start: int | str | None = None, stop=None):
         # In str format: 'HH:MM:SS'
         if isinstance(start, int):
             start = self._get_time_from_frameno(start)
@@ -283,12 +313,17 @@ class FFmpegReader(DefaultReader):
         else:
             frame_nb = stop
 
+        frame_nb
         width, height = self._get_width_ffmpeg(), self._get_height_ffmpeg()
         buffer, _ = (
-            ffmpeg.input(self.path, ss=start)
-            .filter("scale", width, -1)
-            .output("pipe:", format="rawvideo", pix_fmt=self.pix_fmt, vframes=frame_nb)
-            .run(capture_stdout=True, capture_stderr=True)
+            FFmpeg()
+            .input(self.path, ss=start)
+            .option("scale", [width, -1])
+            .option("ss", start)
+            # ffmpeg.input(self.path, ss=start)
+            # .filter("scale", width, -1)
+            .output("pipe:1", format="rawvideo", pix_fmt=self.pix_fmt, vframes=frame_nb)
+            .execute(capture_stdout=True, capture_stderr=True)
         )
         frames = np.frombuffer(buffer, np.uint8).reshape(frame_nb, height, width)
         for frame_index in range(frames.shape[0]):
