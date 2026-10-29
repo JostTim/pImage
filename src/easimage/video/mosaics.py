@@ -6,7 +6,7 @@ import tempfile, secrets
 import warnings
 from enum import Enum
 from pathlib import Path
-from typing import Literal, Optional, Tuple, Any, Callable, TypeVar, List
+from typing import Literal, Tuple, Any, Callable, TypeVar, List
 from abc import ABC, abstractmethod
 
 try:

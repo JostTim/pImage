@@ -1,16 +1,18 @@
 # %% Definitions
-import os, math
+from typing import Protocol, Literal
+import numpy.typing as npt
+import math
 import numpy as np
 import cv2
 
 import warnings
 
-from .video import readers
+from .video.readers import DefaultReader
 
 
 class vignette_object:
     """
-    Core component for VignettBuilder's flexibility
+    Core component for VignetteBuilder's flexibility
     It provides a common API for acessing frames or objects,
     regardless of the actual content class and type of the object
 
@@ -20,22 +22,30 @@ class vignette_object:
         - set_static : works only for objects that contains arrays for now.
             Sets the fact that get_frame returns the same image whatever the index, for use as constant info in layouts
         - close : self explanatory. Usefull for memaps,
-            althoug the use of memaps is strongly discouraged for now, until they get fixed both in term of ram consistency and speed
+            although the use of memaps is strongly discouraged for now, until they get fixed both
+            in term of ram consistency and speed
 
     """
 
-    def __init__(self, _object, parent=None):
+    type : Literal["array", "reader", "builder", "provider"]
+
+
+    def __init__(
+        self,
+        _object: "npt.NDArray | DefaultReader | VignetteBuilder | VariableFrameProvider",
+        parent: "vignette_object | None" = None,
+    ):
         if isinstance(_object, np.ndarray):
             self.type = "array"
-        elif isinstance(_object, readers.DefaultReader):
+        elif isinstance(_object, DefaultReader):
             self.type = "reader"
         elif isinstance(_object, VignetteBuilder):
             self.type = "builder"
         elif isinstance(_object, VariableFrameProvider):
             self.type = "provider"
         else:
-            raise (f"vignette object type not understood :{_object.__class__.__name__}")
-        self.static_mode = False
+            raise TypeError(f"vignette object type not understood :{_object.__class__.__name__}")
+        self.set_static(False)
         self.object = _object
         self.parent = parent
 
@@ -60,36 +70,23 @@ class vignette_object:
         elif self.type == "provider":
             return self.object.get_shape()
 
-    def set_static(self, static_mode):
+    def set_static(self, static_mode: bool):
         self.static_mode = static_mode
 
     def get_frame(self, frame_id):
         if self.type == "memap":
             if 0 > frame_id or frame_id > self.object.shape[0] - 1:
-                return (
-                    np.ones(
-                        (self.object.shape[1], self.object.shape[2], 3), dtype=np.uint8
-                    )
-                    * self.parent.bg_color
-                )
+                return np.ones((self.object.shape[1], self.object.shape[2], 3), dtype=np.uint8) * self.parent.bg_color
             return self.object[frame_id]
         elif self.type == "array":
             if self.static_mode:
                 return self.object[:, :, 0]
             if 0 > frame_id or frame_id >= self.object.shape[2]:
-                return (
-                    np.ones(
-                        (self.object.shape[0], self.object.shape[1], 3), dtype=np.uint8
-                    )
-                    * self.parent.bg_color
-                )
+                return np.ones((self.object.shape[0], self.object.shape[1], 3), dtype=np.uint8) * self.parent.bg_color
             return self.object[:, :, frame_id]
         elif self.type == "reader":
             if 0 > frame_id or frame_id > self.object.frames_number - 1:
-                return (
-                    np.ones((self.object.width, self.object.height, 3), dtype=np.uint8)
-                    * self.parent.bg_color
-                )
+                return np.ones((self.object.width, self.object.height, 3), dtype=np.uint8) * self.parent.bg_color
             # only BW readers for now
             if self.object.color is True:
                 return self.object[:, :, frame_id]
@@ -109,18 +106,22 @@ class vignette_object:
         return type(self).__name__ + " Type :" + self.type
 
     def __repr__(self):
-        return vignette_object.__str__(self)
+        return super().__str__()
 
 
 def dummy_patch_processor(vignette_builder, patch):
     return patch
 
 
-class VariableFrameProvider:
-    def bound(self, function):
-        import types
+class VariableFrameProviderProtocol(Protocol):
 
-        setattr(self, "get_frame", types.MethodType(function, self))
+    def get_frame(self, frame_nb : int) -> tuple[int, int]
+
+class VariableFrameProvider:
+    def bound(self, function : VariableFrameProviderProtocol):
+        import types
+        
+        # setattr(self, "get_frame", types.MethodType(function, self))
 
     def __init__(self, **variables):
         for key, value in variables.items():
@@ -356,19 +357,13 @@ class VignetteBuilder:
         """
         set_static = False
         array_mode = kwargs.pop("array_mode", None)
-        if (
-            array_mode == "np_bwt"
-        ):  # create color dimension from blackwhite image with time
+        if array_mode == "np_bwt":  # create color dimension from blackwhite image with time
             _object = np.repeat(_object[:, :, :, np.newaxis], 3, axis=3)
-        if (
-            array_mode == "np_bw"
-        ):  # create time then color dimension from blackwhite image with no time (only 2 frames)
+        if array_mode == "np_bw":  # create time then color dimension from blackwhite image with no time (only 2 frames)
             _object = np.repeat(_object[:, :, np.newaxis], 2, axis=2)
             _object = np.repeat(_object[:, :, :, np.newaxis], 3, axis=3)
             set_static = True
-        if (
-            array_mode == "np_col"
-        ):  # create time dimension from color image with no time (only 2 frames)
+        if array_mode == "np_col":  # create time dimension from color image with no time (only 2 frames)
             _object = np.repeat(_object[:, :, np.newaxis, :], 2, axis=2)
             set_static = True
 
@@ -407,7 +402,7 @@ class VignetteBuilder:
                 pass
 
     def get_total_duration(self):
-        if self._duration_ready == False:
+        if not self._duration_ready:
             self._calculate_time_offsets()
         return self._total_duration
 
@@ -445,29 +440,16 @@ class VignetteBuilder:
         else:
             for columns in range(1, video_count):
                 lines = math.ceil(video_count / columns)
-                aspectratio = (self.v_objects[0].shape[2] * columns) / (
-                    self.v_objects[0].shape[1] * lines
-                )
+                aspectratio = (self.v_objects[0].shape[2] * columns) / (self.v_objects[0].shape[1] * lines)
                 ratios.append(abs(aspectratio / self.target_aspect_ratio - 1))
 
             try:
-                self.columns = (
-                    next(
-                        index
-                        for index, value in enumerate(ratios)
-                        if value == min(ratios)
-                    )
-                    + 1
-                )
+                self.columns = next(index for index, value in enumerate(ratios) if value == min(ratios)) + 1
             except StopIteration:
-                raise ValueError(
-                    "Must have more than one video to make a grid layout. Add more videos"
-                )
+                raise ValueError("Must have more than one video to make a grid layout. Add more videos")
             self.lines = math.ceil(video_count / self.columns)
 
-    def _apply_snappy_layout(
-        self, alignment="hori", first_object=None, fit_to=None, **extras
-    ):
+    def _apply_snappy_layout(self, alignment="hori", first_object=None, fit_to=None, **extras):
         if len(self.v_objects) > 2:
             raise ValueError(
                 "Cannot snap more than two objects with one vignette builder in current developpement state. Simply nest builders to achieve the desired number of snapped images."
@@ -489,9 +471,7 @@ class VignetteBuilder:
     def get_frame_time_index(self, object_index, frame_index):
         # frame index expressed in lowest sampling rate (1)
         sampling_rate_multiplier = self.sampling_rate_multipliers[object_index]
-        time_offset = self.get_time_offset(
-            object_index
-        )  # return already with a - so set + in equation below
+        time_offset = self.get_time_offset(object_index)  # return already with a - so set + in equation below
         return int(np.round((frame_index + time_offset) / sampling_rate_multiplier))
 
     def get_frame_location(self, index):
@@ -523,39 +503,23 @@ class VignetteBuilder:
         adjust_index = self._fit_to
         if self.lines == 1:
             real_height = self.v_objects[adjust_index].shape[1]
-            self.frameheight = (
-                real_height  # if real_height <= self.maxheight else self.maxheight
-            )
+            self.frameheight = real_height  # if real_height <= self.maxheight else self.maxheight
             # TODO : change ability to fix a dimension for snappy later.
-            scale_multipler = (
-                self.frameheight / self.v_objects[not adjust_index].shape[1]
-            )
-            self.framewidth = math.ceil(
-                scale_multipler * self.v_objects[not adjust_index].shape[2]
-            )
+            scale_multipler = self.frameheight / self.v_objects[not adjust_index].shape[1]
+            self.framewidth = math.ceil(scale_multipler * self.v_objects[not adjust_index].shape[2])
 
             self.background_height = self.frameheight
-            self.background_width = (
-                self.framewidth + self.v_objects[adjust_index].shape[2]
-            )
+            self.background_width = self.framewidth + self.v_objects[adjust_index].shape[2]
 
         elif self.columns == 1:
             real_width = self.v_objects[adjust_index].shape[2]
-            self.framewidth = (
-                real_width  # if real_width <= self.maxwidth else self.maxwidth
-            )
+            self.framewidth = real_width  # if real_width <= self.maxwidth else self.maxwidth
             # TODO : change ability to fix a dimension for snappy later.
-            scale_multipler = (
-                self.framewidth / self.v_objects[not adjust_index].shape[2]
-            )
-            self.frameheight = math.ceil(
-                scale_multipler * self.v_objects[not adjust_index].shape[1]
-            )
+            scale_multipler = self.framewidth / self.v_objects[not adjust_index].shape[2]
+            self.frameheight = math.ceil(scale_multipler * self.v_objects[not adjust_index].shape[1])
 
             self.background_width = self.framewidth
-            self.background_height = (
-                self.frameheight + self.v_objects[adjust_index].shape[1]
-            )
+            self.background_height = self.frameheight + self.v_objects[adjust_index].shape[1]
 
         else:
             raise ValueError("At least one dimension must be equal to 1")
@@ -592,12 +556,8 @@ class VignetteBuilder:
 
     def _make_spacings(self):
         # PADDING
-        self.background_height = self.background_height + (
-            (self.lines - 1) * self.padding
-        )
-        self.background_width = self.background_width + (
-            (self.columns - 1) * self.padding
-        )
+        self.background_height = self.background_height + ((self.lines - 1) * self.padding)
+        self.background_width = self.background_width + ((self.columns - 1) * self.padding)
 
         # BORDER
         self.background_height = self.background_height + (2 * self.border)
@@ -618,18 +578,12 @@ class VignetteBuilder:
     def get_background(self):
         if not self._layout_ready:
             self.get_background_factory()()
-        return (
-            np.ones((self.background_height, self.background_width, 3), dtype=np.uint8)
-            * self.bg_color
-        )
+        return np.ones((self.background_height, self.background_width, 3), dtype=np.uint8) * self.bg_color
 
     def _calculate_time_offsets(self):
         min_value = min(self.time_offsets)
         self._positive_offsets = [offset + min_value for offset in self.time_offsets]
-        videos_ends = [
-            self.v_objects[i].shape[0] + self._positive_offsets[i]
-            for i in range(len(self.v_objects))
-        ]
+        videos_ends = [self.v_objects[i].shape[0] + self._positive_offsets[i] for i in range(len(self.v_objects))]
         self._total_duration = max(videos_ends)
 
     def get_time_offset(self, object_index):
@@ -638,9 +592,7 @@ class VignetteBuilder:
         return -self._positive_offsets[object_index]
 
     def _get_object_frame(self, object_index, frame_index):
-        return self.v_objects[object_index].get_frame(
-            self.get_frame_time_index(object_index, frame_index)
-        )
+        return self.v_objects[object_index].get_frame(self.get_frame_time_index(object_index, frame_index))
 
     def _snappy_frame_getter(self, frame, index):
         f_o = self._f_o  # first_object
@@ -736,24 +688,10 @@ def get_title_band(array, title, height=50, bg_color=0, **kwargs):
 
 # %% Main test
 if __name__ == "__main__":
-    # assign_job(create_job())
-    # limit_memory(10000 * 1024 * 1024) #10GB memory Max
-
-    import os, sys
-    import matplotlib.pyplot as plt
-
-    sys.path.append(r"D:\Tim\Documents\Scripts\__packages__")
-    import pGenUtils as guti
-    import pLabAna as lana
-    import pImage
-
-    path = r"\\Xps139370-1-ds\data_tim_2\Timothe\DATA\BehavioralVideos\Whisker_Video\Whisker_Topview\Expect_3_mush\Mouse60\210428_1"
-    # videos = guti.re_folder_search(path,r".*.avi")
     videos = range(30)
     vb = VignetteBuilder()
 
     for video in videos:
         vid = np.random.rand(1000, 1000) * 255
         vb.add_video(vid, max_time=500, array_type="2D_bw")
-        # vb.add_video( pImage.VideoReader(video).frames() )
     vb.set_layout("grid")

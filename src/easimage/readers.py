@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 from .video.readers import *
-from .video.readers import _readers_factory
 
 # For retrocompatibility:
 import warnings
@@ -9,11 +8,12 @@ import warnings
 
 def _warn_deprecated(name):
     warnings.warn(
-        f"You are importing '{name}' from 'pImage.readers'. This location is deprecated. "
-        "Please import from 'pImage.video.readers' instead.",
+        f"You are importing '{name}' from 'easimage.readers'. This location is deprecated. "
+        "Please import from 'easimage.video.readers' instead.",
         DeprecationWarning,
         stacklevel=3,
     )
+
 
 def __getattr__(name):
     _warn_deprecated(name)

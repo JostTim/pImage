@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 from datetime import datetime, timedelta
-from enum import Enum
 from tqdm import tqdm
 import numpy as np
 import cv2
@@ -26,26 +25,26 @@ def _readers_factory(file_path, **kwargs):
         base = OpenCVReader
     if extension == ".seq":
         try:
-            import hiris
+            from . import hiris
 
             return hiris.HirisReader
         except ImportError:
-            raise ImportError("hiris.py not available in library folder")
+            raise ImportError("hiris library is not available")
     elif extension == ".avi":
 
-        class AviReader(base):
+        class AviReader(base):  # ty: ignore[unsupported-base]
             pass
 
         return AviReader
     elif extension == ".mp4":
 
-        class MP4Reader(base):
+        class MP4Reader(base):  # ty: ignore[unsupported-base]
             pass
 
         return MP4Reader
     else:
 
-        class UnknownReader(base):
+        class UnknownReader(base):  # ty: ignore[unsupported-base]
             pass
 
         return UnknownReader
@@ -97,7 +96,7 @@ class DefaultReader:
 
     ############## Methods to keep :
     @property
-    def frames_number(self):
+    def frames_number(self) -> int:
         try:
             self._frames_number
         except AttributeError:
@@ -142,7 +141,7 @@ class DefaultReader:
         return np.squeeze(np.moveaxis(np.array(list(self.sequence(time_start, time_stop))), 0, 2)[(index[0], index[1])])
 
     @property
-    def width(self):
+    def width(self) -> int:
         try:
             self._width
         except AttributeError:
@@ -153,7 +152,7 @@ class DefaultReader:
             return self._width
 
     @property
-    def height(self):
+    def height(self) -> int:
         try:
             self._height
         except AttributeError:
@@ -164,7 +163,7 @@ class DefaultReader:
             return self._height
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, int, int]:
         return (self.width, self.height, self.frames_number)
 
 
@@ -255,34 +254,35 @@ class FFmpegReader(DefaultReader):
     def get_framerate(self):
         return float(ffmpeg.probe(self.path)["streams"][0]["r_frame_rate"].split("/")[0])
 
-    def _get_time_from_frameno(self, frame_no):
+    def _get_time_from_frameno(self, frame_no: int) -> str:
         return str(timedelta(seconds=frame_no / self.get_framerate()))
 
-    def _get_frameno_from_time(self, time_str):
+    def _get_frameno_from_time(self, time_str) -> int:
         # imprecise at the number of frames per second
 
         frame_seconds = (datetime.strptime(time_str, "%H:%M:%S") - datetime(1900, 1, 1)).total_seconds()
         return int(frame_seconds * self.get_framerate())
 
-    def _get_height_ffmpeg(self):
+    def _get_height_ffmpeg(self) -> int:
         return ffmpeg.probe(self.path)["streams"][0]["height"]
 
-    def _get_width_ffmpeg(self):
+    def _get_width_ffmpeg(self) -> int:
         return ffmpeg.probe(self.path)["streams"][0]["width"]
 
-    def _get_frames_number(self):
-        return np.inf
+    def _get_frames_number(self) -> int:
+        return np.inf  # ty: ignore[invalid-return-type]
 
-    def sequence(self, start=None, stop=None):
+    def sequence(self, start: int | str | None = None, stop: str | int | None = None):
         # In str format: 'HH:MM:SS'
         if isinstance(start, int):
             start = self._get_time_from_frameno(start)
-        if isinstance(stop, str):
+        if stop is None:
+            frame_nb = self._get_frames_number()
+        elif isinstance(stop, str):
             frame_no = self._get_frameno_from_time(stop)
             frame_nb = frame_no - self._get_frameno_from_time(start)
         else:
             frame_nb = stop
-
         width, height = self._get_width_ffmpeg(), self._get_height_ffmpeg()
         buffer, _ = (
             ffmpeg.input(self.path, ss=start)

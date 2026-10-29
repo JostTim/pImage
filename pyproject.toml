@@ -1,6 +1,6 @@
 [project]
 name = "easimage"
-version = "3.0.6"
+version = "3.0.7"
 description = "Image and video management for research use, in an unified easy to use API"
 authors = [
     { name = "Timothe Jost-Mousseau", email = "timothe.jost-mousseau@pasteur.com" },
@@ -8,10 +8,11 @@ authors = [
 dependencies = [
     "numpy>=1.23",
     "opencv-python-headless>=4.6",
-    "ffmpeg>=1.4",
+    "ffmpeg-python>=0.2.0",
     "tifffile>=2022.10",
     "tqdm>=4.67.3",
-    "matplotlib>=3.10.9",
+    "matplotlib>=3.11",
+    "pillow>=9.0"
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -22,11 +23,8 @@ github = "https://github.com/JostTim/pImage"
 pypi = "https://pypi.org/project/easimage/"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["pImage"]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
 
 [tool.uv]
 package = true
@@ -40,10 +38,10 @@ line-length = 120
 
 [tool.bumpversion]
 files = [
-    { filename = "pImage/__init__.py", search = "__version__ = \"{current_version}\"", replace = "__version__ = \"{new_version}\"" },
+    { filename = "src/easimage/__init__.py", search = "__version__ = \"{current_version}\"", replace = "__version__ = \"{new_version}\"" },
     { filename = "pyproject.toml", search = "version = \"{current_version}\"", replace = "version = \"{new_version}\"" },
 ]
-current_version = "3.0.6"
+current_version = "3.0.7"
 regex = false
 ignore_missing_version = false
 ignore_missing_files = false

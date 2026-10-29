@@ -1,7 +1,4 @@
-# -*- coding: utf-8 -*-
-# pImage.__init__.py
-
-__version__ = "3.0.6"
+__version__ = "3.0.7"
 __all__ = ["interact", "mosaics", "pillow", "pillow_draw"]
 
 from .image import *
@@ -27,7 +24,7 @@ def __getattr__(name):
 
     if name in ["readers", "writers", "converters"]:
         warnings.warn(
-            f"Accessing 'pImage.{name}' is deprecated. Please use 'pImage.video.{name}' instead.",
+            f"Accessing 'easimage.{name}' is deprecated. Please use 'easimage.video.{name}' instead.",
             DeprecationWarning,
             stacklevel=2,
         )

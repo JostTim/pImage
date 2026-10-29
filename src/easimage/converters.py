@@ -10,8 +10,8 @@ import warnings
 
 def _warn_deprecated(name):
     warnings.warn(
-        f"You are importing '{name}' from 'pImage.converters'. This location is deprecated. "
-        "Please import from 'pImage.video.converters' instead.",
+        f"You are importing '{name}' from 'easimage.converters'. This location is deprecated. "
+        "Please import from 'easimage.video.converters' instead.",
         DeprecationWarning,
         stacklevel=3,
     )

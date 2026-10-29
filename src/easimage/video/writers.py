@@ -19,17 +19,13 @@ Created on Tue Oct 12 18:54:37 2021
 
 import os, warnings
 import numpy as np
-from cv2 import VideoWriter as CV2VideoWriter, VideoWriter_fourcc
-from cv2 import cvtColor, COLOR_RGB2BGR, COLOR_HSV2BGR, COLOR_BGRA2BGR, COLOR_RGBA2BGR
+from cv2 import VideoWriter as CV2VideoWriter
 
 
 def select_extension_writer(file_path):
     if os.path.splitext(file_path)[1] == ".avi":
         return AviWriter
-    if (
-        os.path.splitext(file_path)[1] == ".mp4"
-        or os.path.splitext(file_path)[1] == ".m4v"
-    ):
+    if os.path.splitext(file_path)[1] == ".mp4" or os.path.splitext(file_path)[1] == ".m4v":
         return MP4Writer
     if os.path.splitext(file_path)[1] == ".mkv":
         return MKVWriter
@@ -43,7 +39,8 @@ def select_extension_writer(file_path):
 
 class VideoWriter:
     """
-    This class, based on the file path extension provided, automatically selects and instantiates the appropriate video writer class.
+    This class, based on the file path extension provided, automatically selects and instantiates the appropriate video
+    writer class.
     """
 
     def __new__(cls, path, **kwargs):
@@ -53,7 +50,8 @@ class VideoWriter:
 
 class DefaultWriter:
     """
-    This is the base video writer class, providing a common interface and flow for video writing. Specific video writer classes can inherit from this and override methods as needed.
+    This is the base video writer class, providing a common interface and flow for video writing. Specific video writer
+    classes can inherit from this and override methods as needed.
     """
 
     ############## Methods that needs to be overriden :
@@ -83,9 +81,12 @@ class DefaultWriter:
     def write_from(self, frame_yielder):
         """
         writes to disk all available frames from a yielder.
-        The yielder can be anything providing valid image data, (in a consistant manner from the first frame to the last the writer recieved)
-        It's intended to be used specifically with a reader (reader = pImage.VideoReader(videopath)) and method reader.frames() (in this case it gives all the frames available)
-        or reader.sequence(start,stop) (in this case it gives frames between frame 'start' and frame 'stop' supplied as integers)
+        The yielder can be anything providing valid image data, (in a consistant manner from the first
+        frame to the last the writer recieved)
+        It's intended to be used specifically with a reader (reader = easimage.VideoReader(videopath))
+        and method reader.frames() (in this case it gives all the frames available)
+        or reader.sequence(start,stop) (in this case it gives frames between frame 'start' and frame
+        'stop' supplied as integers)
         """
 
         def activity_bar(
@@ -113,7 +114,8 @@ class DefaultWriter:
 
 class OpenCVWriter(DefaultWriter):
     """
-    OpenCVWriter inherits from DefaultWriter and uses OpenCV VideoWriter to create videos. The writer can be customized using various parameters provided as kwargs while initializing the writer.
+    OpenCVWriter inherits from DefaultWriter and uses OpenCV VideoWriter to create videos. The writer can be customized
+    using various parameters provided as kwargs while initializing the writer.
     """
 
     def __init__(self, path, **kwargs):
@@ -171,7 +173,7 @@ class OpenCVWriter(DefaultWriter):
         self.codec = kwargs.get("codec", "MJPG")
         self.dtype = kwargs.get("dtype", "uint8")
 
-        self.fourcc = VideoWriter_fourcc(*self.codec)
+        self.fourcc = CV2VideoWriter.fourcc(*self.codec)
 
         self.file_handle = None
 
@@ -184,9 +186,7 @@ class OpenCVWriter(DefaultWriter):
 
         frame = array.astype(self.dtype)
         if len(frame.shape) < 3:
-            frame = np.repeat(
-                frame[:, :, np.newaxis], 3, axis=2
-            )  # ...I just duplicate 3 times gray data if it isn't
+            frame = np.repeat(frame[:, :, np.newaxis], 3, axis=2)  # ...I just duplicate 3 times gray data if it isn't
         elif self.rgbconv is not None:
             frame = eval(f"cvtColor(frame, COLOR_{self.rgbconv})")
         self.file_handle.write(frame)
@@ -200,14 +200,15 @@ class OpenCVWriter(DefaultWriter):
 
 class AviWriter(OpenCVWriter):
     """
-    AviWriter inherits from OpenCVWriter, and is specifically for writing .avi video files. It provides less quality reduction and results in relatively larger files.
+    AviWriter inherits from OpenCVWriter, and is specifically for writing .avi video files. It provides less quality
+    reduction and results in relatively larger files.
     Has the huge advantage of being able to terminate file almost propery if not closed.
     """
 
     def __init__(self, path, **kwargs):
         super().__init__(path, **kwargs)
         self.codec = kwargs.get("codec", "MJPG")
-        self.fourcc = VideoWriter_fourcc(*self.codec)
+        self.fourcc = CV2VideoWriter.fourcc(*self.codec)
 
 
 class MP4Writer(OpenCVWriter):
@@ -218,33 +219,33 @@ class MP4Writer(OpenCVWriter):
     def __init__(self, path, **kwargs):
         super().__init__(path, **kwargs)
         self.codec = kwargs.get("codec", "mp4v")
-        self.fourcc = VideoWriter_fourcc(*self.codec)
+        self.fourcc = CV2VideoWriter.fourcc(*self.codec)
 
 
 class MKVWriter(OpenCVWriter):
     """
-    MKVWriter inherits from OpenCVWriter, and is specifically for writing .mkv video files. The DIVX codec used by this writer provides high disk-space efficiency but might result in quality loss.
+    MKVWriter inherits from OpenCVWriter, and is specifically for writing .mkv video files. The DIVX codec used by this
+    writer provides high disk-space efficiency but might result in quality loss.
     Use for presentations with light videos. Avoid using for data analysis.
     """
 
     def __init__(self, path, **kwargs):
         super().__init__(path, **kwargs)
         self.codec = kwargs.get("codec", "DIVX")
-        self.fourcc = VideoWriter_fourcc(*self.codec)
+        self.fourcc = CV2VideoWriter.fourcc(*self.codec)
 
 
 class TiffWriter(DefaultWriter):
     """
-    TiffWriter inherits from DefaultWriter, and is specifically for writing .tiff image files. Notably, it uses libtiff to create single frame TIFF images.
+    TiffWriter inherits from DefaultWriter, and is specifically for writing .tiff image files. Notably, it uses libtiff
+    to create single frame TIFF images.
     """
 
     # libtiff is broken. Do not use for now, need to find a replacement at some point.
     try:
         from tifffile import TiffWriter
-    except ImportError as e:
-        warnings.warn(
-            "Could not import tifffile. You will not be able to use TiffWriter"
-        )
+    except ImportError:
+        warnings.warn("Could not import tifffile. You will not be able to use TiffWriter")
 
     def __init__(self, path, **kwargs):
         self.path = os.path.dirname(path)
@@ -254,9 +255,7 @@ class TiffWriter(DefaultWriter):
     def _make_full_fullpath(self, index):
         if not os.path.isdir(self.path):
             os.makedirs(self.path)
-        return os.path.join(
-            self.path, self.file_prefix + f"_{str(index).zfill(5)}.tiff"
-        )
+        return os.path.join(self.path, self.file_prefix + f"_{str(index).zfill(5)}.tiff")
 
     def _write_frame(self, array):
         _fullpath = self._make_full_fullpath(self.index)
@@ -268,12 +267,13 @@ class TiffWriter(DefaultWriter):
 
 class GifWriter(DefaultWriter):
     """
-    GifWriter inherits from DefaultWriter, and is specifically for creating GIFs. This writer accumulates frames and stores them in a GIF format. It allows customization such as framerate, seamless looping, optimization, etc.
+    GifWriter inherits from DefaultWriter, and is specifically for creating GIFs. This writer accumulates frames and
+    stores them in a GIF format. It allows customization such as framerate, seamless looping, optimization, etc.
     """
 
     try:
         from PIL import Image as pillow_image
-    except ImportError as e:
+    except ImportError:
         warnings.warn("Could not import pillow. You will not be able to use GifWriter")
 
     def __init__(self, path, **kwargs):
@@ -292,9 +292,7 @@ class GifWriter(DefaultWriter):
         stop = len(self.frame_bank)
         img0 = self.frame_bank[start]
         if self.seamless:
-            rest_of_imgs = (
-                self.frame_bank[start + 1 : stop] + self.frame_bank[stop:start:-1]
-            )
+            rest_of_imgs = self.frame_bank[start + 1 : stop] + self.frame_bank[stop:start:-1]
         else:
             rest_of_imgs = self.frame_bank[start + 1 : stop]
 

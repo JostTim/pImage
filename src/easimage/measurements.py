@@ -32,12 +32,8 @@ class SiftComparison:
 
         sift = cv2.SIFT_create()
 
-        reference_keypoints, reference_descriptors = sift.detectAndCompute(
-            reference_image, None
-        )
-        measured_keypoints, measured_descriptors = sift.detectAndCompute(
-            measured_image, None
-        )
+        reference_keypoints, reference_descriptors = sift.detectAndCompute(reference_image, None)
+        measured_keypoints, measured_descriptors = sift.detectAndCompute(measured_image, None)
 
         bf = cv2.BFMatcher(cv2.NORM_L1, crossCheck=True)
 
@@ -48,21 +44,15 @@ class SiftComparison:
             max_pt_num = len(matches)
 
         reference_points = np.expand_dims(
-            np.array(
-                [reference_keypoints[matches[i].queryIdx].pt for i in range(max_pt_num)]
-            ),
+            np.array([reference_keypoints[matches[i].queryIdx].pt for i in range(max_pt_num)]),
             axis=1,
         ).astype(np.float32)
         measured_points = np.expand_dims(
-            np.array(
-                [measured_keypoints[matches[i].trainIdx].pt for i in range(max_pt_num)]
-            ),
+            np.array([measured_keypoints[matches[i].trainIdx].pt for i in range(max_pt_num)]),
             axis=1,
         ).astype(np.float32)
 
-        vector, match_mask = cv2.estimateAffinePartial2D(
-            reference_points, measured_points
-        )
+        vector, match_mask = cv2.estimateAffinePartial2D(reference_points, measured_points)
 
         return SiftComparison(
             vector,
@@ -155,9 +145,7 @@ class SiftComparison:
         return _str
 
 
-def correlation_2D(
-    image1_gray, image2_gray, flat_field=None, flat_field_corrected=False, gaussian=None
-):
+def correlation_2D(image1_gray, image2_gray, flat_field=None, flat_field_corrected=False, gaussian=None):
     """Calculate the 2D correlation image between two images
 
     Args:
@@ -171,12 +159,8 @@ def correlation_2D(
     from scipy.signal import fftconvolve
 
     if flat_field_corrected:
-        image1_gray = flat_field_correction(
-            image1_gray, gaussian=gaussian, flat_field=flat_field
-        )
-        image2_gray = flat_field_correction(
-            image2_gray, gaussian=gaussian, flat_field=flat_field
-        )
+        image1_gray = flat_field_correction(image1_gray, gaussian=gaussian, flat_field=flat_field)
+        image2_gray = flat_field_correction(image2_gray, gaussian=gaussian, flat_field=flat_field)
 
     # get rid of the color channels by performing a grayscale transform
     # the type cast into 'float' is to avoid overflows
