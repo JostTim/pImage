@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # pImage.__init__.py
 
-__version__ = "3.0.6"
+__version__ = "3.0.7"
 __all__ = ["interact", "mosaics", "pillow", "pillow_draw"]
 
 from .image import *
